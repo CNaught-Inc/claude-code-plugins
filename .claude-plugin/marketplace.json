@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cnaught-plugins",
+  "description": "Claude Code plugins by CNaught",
+  "owner": { "name": "CNaught" },
+  "plugins": [
+    {
+      "name": "carbon",
+      "description": "Track and offset carbon emissions from your Claude Code usage",
+      "source": "./plugins/carbon",
+      "version": "0.1.0"
+    }
+  ]
+}

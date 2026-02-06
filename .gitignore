@@ -1,0 +1,8 @@
+node_modules/
+.env.local
+.turbo/
+*.tsbuildinfo
+
+# dist/ is ignored locally to prevent accidental commits
+# CI force-adds dist/ via `git add -f` for plugin distribution
+dist/
