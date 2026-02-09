@@ -7,7 +7,7 @@ Show current carbon tracking status.
 Run the status script and display the output to the user:
 
 ```bash
-node dist/scripts/carbon-status.js
+node scripts/bun-runner.js dist/scripts/carbon-status.js
 ```
 
 ## What it shows
@@ -18,9 +18,9 @@ node dist/scripts/carbon-status.js
 - Total energy consumption (Wh)
 - Total CO2 emissions (grams)
 
-### MCP Integration
-- MCP server URL
-- Connection status (Connected / Token expired / Not configured)
+### Backend Integration
+- Organization ID
+- Connection status (Connected / Connected (will auto-refresh) / Token expired / Not configured)
 - Last updated time
 
 ### Sync Status (if connected)
@@ -45,9 +45,9 @@ Local Statistics:
   Energy consumed:     12.34 Wh
   CO2 emitted:        5.67g
 
-MCP Integration:
+Backend Integration:
 ----------------------------------------
-  MCP Server:          https://mcp.cnaught.com
+  Organization:        org_abc123
   Status:              Connected
   Last updated:        2 minutes ago
 

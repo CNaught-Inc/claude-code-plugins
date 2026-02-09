@@ -30,6 +30,7 @@ import {
     parseSession
 } from '../session-parser.js';
 import {
+    checkOnboardingStatus,
     refreshTokenIfNeeded,
     resolveOrganizationId,
     syncSessions
@@ -191,6 +192,21 @@ async function main(): Promise<void> {
                 const stats = getAggregateStats(db);
                 const authConfig = getAuthConfig(db);
 
+                let hasSubscription: boolean | null = null;
+                let onboardingUrl: string | null = null;
+                if (authConfig) {
+                    try {
+                        const freshAuth = await refreshTokenIfNeeded(db, authConfig);
+                        const onboarding = await checkOnboardingStatus(db, freshAuth);
+                        hasSubscription = onboarding.hasSubscription;
+                        onboardingUrl = onboarding.hasSubscription
+                            ? null
+                            : onboarding.onboardingUrl;
+                    } catch {
+                        // Non-critical — subscription check may fail offline
+                    }
+                }
+
                 console.log(
                     JSON.stringify({
                         unsyncedSessions: stats.unsyncedSessions,
@@ -198,7 +214,9 @@ async function main(): Promise<void> {
                         totalCO2Grams: stats.totalCO2Grams,
                         totalCO2Formatted: formatCO2(stats.totalCO2Grams),
                         authConfigured: authConfig !== null,
-                        organizationId: authConfig?.organizationId ?? null
+                        organizationId: authConfig?.organizationId ?? null,
+                        hasSubscription,
+                        onboardingUrl
                     })
                 );
             } else {

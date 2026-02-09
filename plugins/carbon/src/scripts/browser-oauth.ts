@@ -9,7 +9,7 @@
 
 import { initializeDatabase, openDatabase, saveAuthConfig } from '../data-store.js';
 import { runBrowserOAuthFlow } from '../oauth-flow.js';
-import { resolveOrganizationId, refreshTokenIfNeeded } from '../sync-service.js';
+import { resolveOrganizationId, refreshTokenIfNeeded, checkOnboardingStatus } from '../sync-service.js';
 import { logError } from '../utils/stdin.js';
 
 async function main(): Promise<void> {
@@ -34,14 +34,34 @@ async function main(): Promise<void> {
 
         // Resolve and cache organization ID
         console.log('Resolving organization...');
+        let orgResolved = false;
         try {
             const orgId = await resolveOrganizationId(db, authConfig);
             console.log(`Organization resolved: ${orgId}`);
+            orgResolved = true;
         } catch (error) {
             console.log(
                 `Warning: Could not resolve organization: ${error instanceof Error ? error.message : String(error)}`
             );
-            console.log('Organization will be resolved on first sync.');
+            console.log('Organization will be created in the next step.');
+        }
+
+        // Only check onboarding if we have an org
+        if (orgResolved) {
+            try {
+                const freshAuth = { ...authConfig, organizationId: null };
+                const onboarding = await checkOnboardingStatus(db, freshAuth);
+                if (!onboarding.hasSubscription) {
+                    console.log('\nSubscription not found for this organization.');
+                    console.log(`Onboarding URL: ${onboarding.onboardingUrl}`);
+                } else {
+                    console.log('\nSubscription active — auto-offsetting is enabled.');
+                }
+            } catch (error) {
+                console.log(
+                    `Warning: Could not check subscription status: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
         }
 
         console.log('\nAuthentication successful! Tokens stored.');

@@ -123,6 +123,7 @@ const MY_ORGANIZATIONS_QUERY = gql`
         myOrganizations {
             id
             name
+            stripeSubscriptionId
         }
     }
 `;
@@ -142,7 +143,7 @@ export async function resolveOrganizationId(
     const client = createGraphQLClient(authConfig.accessToken);
 
     const data = (await client.request(MY_ORGANIZATIONS_QUERY)) as {
-        myOrganizations: { id: string; name: string }[];
+        myOrganizations: { id: string; name: string; stripeSubscriptionId: string | null }[];
     };
 
     if (!data.myOrganizations || data.myOrganizations.length === 0) {
@@ -155,10 +156,10 @@ export async function resolveOrganizationId(
     return orgId;
 }
 
-const UPSERT_SESSION_MUTATION = gql`
-    mutation UpsertMyClaudeCodeSession($input: UpsertMyClaudeCodeSessionInput!) {
-        upsertMyClaudeCodeSession(input: $input) {
-            session {
+const UPSERT_SESSIONS_MUTATION = gql`
+    mutation UpsertMyClaudeCodeSessions($input: UpsertMyClaudeCodeSessionsInput!) {
+        upsertMyClaudeCodeSessions(input: $input) {
+            sessions {
                 id
                 co2Grams
             }
@@ -167,64 +168,157 @@ const UPSERT_SESSION_MUTATION = gql`
 `;
 
 /**
- * Sync a single session to the backend via direct GraphQL
- */
-export async function syncSession(
-    session: SessionRecord,
-    authConfig: AuthConfig,
-    organizationId: string
-): Promise<SyncResult> {
-    try {
-        const client = createGraphQLClient(authConfig.accessToken, organizationId);
-
-        await client.request(UPSERT_SESSION_MUTATION, {
-            input: {
-                input: {
-                    sessionId: session.sessionId,
-                    projectPath: session.projectPath || '',
-                    co2Grams: session.co2Grams,
-                    totalInputTokens: session.inputTokens,
-                    totalOutputTokens: session.outputTokens,
-                    totalCacheCreationTokens: session.cacheCreationTokens,
-                    totalCacheReadTokens: session.cacheReadTokens,
-                    energyWh: session.energyWh
-                }
-            }
-        });
-
-        return {
-            sessionId: session.sessionId,
-            success: true
-        };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-            sessionId: session.sessionId,
-            success: false,
-            error: message
-        };
-    }
-}
-
-/**
- * Sync multiple sessions to the backend
+ * Sync multiple sessions to the backend in a single batch request
  */
 export async function syncSessions(
     sessions: SessionRecord[],
     authConfig: AuthConfig,
     organizationId: string
 ): Promise<SyncResult[]> {
-    const results: SyncResult[] = [];
-
-    for (const session of sessions) {
-        const result = await syncSession(session, authConfig, organizationId);
-        results.push(result);
-
-        // Small delay between requests to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 100));
+    if (sessions.length === 0) {
+        return [];
     }
 
-    return results;
+    const BATCH_SIZE = 100;
+    const client = createGraphQLClient(authConfig.accessToken, organizationId);
+    const allResults: SyncResult[] = [];
+
+    for (let i = 0; i < sessions.length; i += BATCH_SIZE) {
+        const batch = sessions.slice(i, i + BATCH_SIZE);
+
+        try {
+            const sessionsInput = batch.map((session) => ({
+                sessionId: session.sessionId,
+                projectPath: session.projectPath || '',
+                co2Grams: session.co2Grams,
+                totalInputTokens: session.inputTokens,
+                totalOutputTokens: session.outputTokens,
+                totalCacheCreationTokens: session.cacheCreationTokens,
+                totalCacheReadTokens: session.cacheReadTokens,
+                energyWh: session.energyWh
+            }));
+
+            await client.request(UPSERT_SESSIONS_MUTATION, {
+                input: {
+                    sessions: sessionsInput
+                }
+            });
+
+            // All succeeded (batch is atomic)
+            for (const session of batch) {
+                allResults.push({ sessionId: session.sessionId, success: true });
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+
+            // All failed (batch is atomic)
+            for (const session of batch) {
+                allResults.push({ sessionId: session.sessionId, success: false, error: message });
+            }
+        }
+    }
+
+    return allResults;
+}
+
+/**
+ * Fetch the authenticated user's email from Auth0 /userinfo endpoint
+ */
+export async function getUserEmail(accessToken: string): Promise<string> {
+    const url = `https://${CONFIG.auth0Domain}/userinfo`;
+    const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch user info (${response.status}): ${await response.text()}`);
+    }
+
+    const data = (await response.json()) as { email?: string };
+    if (!data.email) {
+        throw new Error('No email found in user profile');
+    }
+
+    return data.email;
+}
+
+const CREATE_MY_ORGANIZATION_MUTATION = gql`
+    mutation CreateMyOrganization($input: CreateMyOrganizationInput!) {
+        createMyOrganization(input: $input) {
+            organization {
+                id
+                name
+            }
+        }
+    }
+`;
+
+/**
+ * Create an organization for the authenticated user.
+ * Returns the new organization's ID and name.
+ */
+export async function createOrganization(
+    db: Database,
+    accessToken: string,
+    name: string,
+    billingEmail: string
+): Promise<{ id: string; name: string }> {
+    const client = createGraphQLClient(accessToken);
+
+    const data = (await client.request(CREATE_MY_ORGANIZATION_MUTATION, {
+        input: {
+            name,
+            billingEmail,
+            previouslyPurchasedOffsets: false
+        }
+    })) as {
+        createMyOrganization: {
+            organization: { id: string; name: string };
+        };
+    };
+
+    const org = data.createMyOrganization.organization;
+    saveOrganizationId(db, org.id);
+
+    return org;
+}
+
+/**
+ * Slugify text for URL construction (matches frontend convention)
+ */
+function slugify(text: string): string {
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+/**
+ * Check onboarding status for the user's organization.
+ * Returns whether the org has a subscription and the onboarding URL if not.
+ */
+export async function checkOnboardingStatus(
+    db: Database,
+    authConfig: AuthConfig
+): Promise<{ hasSubscription: boolean; onboardingUrl: string }> {
+    const client = createGraphQLClient(authConfig.accessToken);
+
+    const data = (await client.request(MY_ORGANIZATIONS_QUERY)) as {
+        myOrganizations: { id: string; name: string; stripeSubscriptionId: string | null }[];
+    };
+
+    if (!data.myOrganizations || data.myOrganizations.length === 0) {
+        throw new Error('No organizations found for this user');
+    }
+
+    const org = data.myOrganizations[0];
+    const slug = `${slugify(org.name)}-${org.id}`;
+    const onboardingUrl = `${CONFIG.appUrl}/${slug}/api-quick-start`;
+
+    return {
+        hasSubscription: !!org.stripeSubscriptionId,
+        onboardingUrl
+    };
 }
 
 /**

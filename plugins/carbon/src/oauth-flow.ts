@@ -122,6 +122,14 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
     // 3. Start local callback server and wait for the redirect
     return new Promise<OAuthFlowResult>((resolve, reject) => {
         let settled = false;
+        let flowTimeout: ReturnType<typeof setTimeout>;
+
+        function shutdown() {
+            settled = true;
+            clearTimeout(flowTimeout);
+            server.close();
+            server.closeAllConnections();
+        }
 
         const server = http.createServer(async (req, res) => {
             if (settled) {
@@ -144,8 +152,7 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
                 res.end(
                     '<html><body><h1>Authentication Failed</h1><p>You can close this window.</p></body></html>'
                 );
-                settled = true;
-                server.close();
+                shutdown();
                 reject(new Error(`OAuth error: ${description}`));
                 return;
             }
@@ -158,8 +165,7 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
                 res.end(
                     '<html><body><h1>Error</h1><p>State mismatch. Please try again.</p></body></html>'
                 );
-                settled = true;
-                server.close();
+                shutdown();
                 reject(new Error('OAuth state mismatch'));
                 return;
             }
@@ -169,8 +175,7 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
                 res.end(
                     '<html><body><h1>Error</h1><p>No authorization code received.</p></body></html>'
                 );
-                settled = true;
-                server.close();
+                shutdown();
                 reject(new Error('No authorization code received'));
                 return;
             }
@@ -189,8 +194,7 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
                     '<html><body><h1>Authentication Successful!</h1><p>You can close this window and return to Claude Code.</p></body></html>'
                 );
 
-                settled = true;
-                server.close();
+                shutdown();
                 resolve({
                     accessToken: tokens.access_token,
                     refreshToken: tokens.refresh_token,
@@ -201,8 +205,7 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
                 res.end(
                     '<html><body><h1>Error</h1><p>Token exchange failed. Please try again.</p></body></html>'
                 );
-                settled = true;
-                server.close();
+                shutdown();
                 reject(err);
             }
         });
@@ -218,6 +221,8 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
             authorizeUrl.searchParams.set('state', state);
             authorizeUrl.searchParams.set('code_challenge', codeChallenge);
             authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+            authorizeUrl.searchParams.set('skip_profile', 'true');
+            authorizeUrl.searchParams.set('skip_onboarding', 'true');
 
             console.log('\nOpening browser for authentication...');
             console.log(`If the browser does not open, visit: ${authorizeUrl.toString()}\n`);
@@ -227,16 +232,15 @@ export async function runBrowserOAuthFlow(): Promise<OAuthFlowResult> {
 
         server.on('error', (err) => {
             if (!settled) {
-                settled = true;
+                shutdown();
                 reject(new Error(`Callback server error: ${err.message}`));
             }
         });
 
         // Timeout
-        setTimeout(() => {
+        flowTimeout = setTimeout(() => {
             if (!settled) {
-                settled = true;
-                server.close();
+                shutdown();
                 reject(new Error('OAuth flow timed out after 5 minutes'));
             }
         }, FLOW_TIMEOUT_MS);

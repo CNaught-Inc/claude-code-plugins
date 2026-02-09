@@ -20,6 +20,7 @@ Generate a carbon emissions report for recent usage.
 - Kilometers driven in a car
 - Smartphone charges
 - Hours of LED light usage
+- Google searches
 
 ### Daily Breakdown
 - Per-day emissions chart
@@ -31,7 +32,7 @@ Generate a carbon emissions report for recent usage.
 ## Script
 
 ```bash
-node dist/scripts/carbon-report.js
+node scripts/bun-runner.js dist/scripts/carbon-report.js
 ```
 
 ## Example Output
@@ -61,8 +62,8 @@ Daily Breakdown:
   Sat: 0.38g  ###
   Sun: 0.37g  ###
 
-Top Projects:
-  frontend-monorepo: 2.45g (62%)
-  backend-api: 1.12g (28%)
-  other: 0.37g (10%)
+Projects:
+  frontend-monorepo              2.45g (62%)
+  backend-api                    1.12g (28%)
+  other                          0.37g (10%)
 ```

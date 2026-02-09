@@ -7,7 +7,7 @@ Manually sync unsynced carbon tracking sessions to the CNaught backend.
 Run the sync script:
 
 ```bash
-node dist/scripts/carbon-sync.js
+node scripts/bun-runner.js dist/scripts/carbon-sync.js
 ```
 
 The script will:

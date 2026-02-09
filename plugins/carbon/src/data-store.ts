@@ -176,9 +176,9 @@ export function upsertSession(
             cache_creation_tokens, cache_read_tokens, total_tokens,
             energy_wh, co2_grams, primary_model, created_at, updated_at
         ) VALUES (
-            @sessionId, @projectPath, @inputTokens, @outputTokens,
-            @cacheCreationTokens, @cacheReadTokens, @totalTokens,
-            @energyWh, @co2Grams, @primaryModel, @createdAt, @updatedAt
+            $sessionId, $projectPath, $inputTokens, $outputTokens,
+            $cacheCreationTokens, $cacheReadTokens, $totalTokens,
+            $energyWh, $co2Grams, $primaryModel, $createdAt, $updatedAt
         )
         ON CONFLICT(session_id) DO UPDATE SET
             project_path = excluded.project_path,
@@ -194,18 +194,18 @@ export function upsertSession(
     `);
 
     stmt.run({
-        sessionId: session.sessionId,
-        projectPath: session.projectPath,
-        inputTokens: session.inputTokens,
-        outputTokens: session.outputTokens,
-        cacheCreationTokens: session.cacheCreationTokens,
-        cacheReadTokens: session.cacheReadTokens,
-        totalTokens: session.totalTokens,
-        energyWh: session.energyWh,
-        co2Grams: session.co2Grams,
-        primaryModel: session.primaryModel,
-        createdAt: session.createdAt.toISOString(),
-        updatedAt: session.updatedAt.toISOString()
+        $sessionId: session.sessionId,
+        $projectPath: session.projectPath,
+        $inputTokens: session.inputTokens,
+        $outputTokens: session.outputTokens,
+        $cacheCreationTokens: session.cacheCreationTokens,
+        $cacheReadTokens: session.cacheReadTokens,
+        $totalTokens: session.totalTokens,
+        $energyWh: session.energyWh,
+        $co2Grams: session.co2Grams,
+        $primaryModel: session.primaryModel,
+        $createdAt: session.createdAt.toISOString(),
+        $updatedAt: session.updatedAt.toISOString()
     });
 }
 
@@ -367,8 +367,8 @@ export function saveAuthConfig(db: Database, config: AuthConfig): void {
             id, access_token, refresh_token, access_token_expires_at,
             refresh_token_expires_at, organization_id, updated_at
         ) VALUES (
-            1, @accessToken, @refreshToken, @accessTokenExpiresAt,
-            @refreshTokenExpiresAt, @organizationId, @updatedAt
+            1, $accessToken, $refreshToken, $accessTokenExpiresAt,
+            $refreshTokenExpiresAt, $organizationId, $updatedAt
         )
         ON CONFLICT(id) DO UPDATE SET
             access_token = excluded.access_token,
@@ -380,12 +380,12 @@ export function saveAuthConfig(db: Database, config: AuthConfig): void {
     `);
 
     stmt.run({
-        accessToken: config.accessToken,
-        refreshToken: config.refreshToken,
-        accessTokenExpiresAt: config.accessTokenExpiresAt.toISOString(),
-        refreshTokenExpiresAt: config.refreshTokenExpiresAt.toISOString(),
-        organizationId: config.organizationId,
-        updatedAt: config.updatedAt.toISOString()
+        $accessToken: config.accessToken,
+        $refreshToken: config.refreshToken,
+        $accessTokenExpiresAt: config.accessTokenExpiresAt.toISOString(),
+        $refreshTokenExpiresAt: config.refreshTokenExpiresAt.toISOString(),
+        $organizationId: config.organizationId,
+        $updatedAt: config.updatedAt.toISOString()
     });
 }
 

@@ -20,16 +20,19 @@ const auth0Domain = process.env.CNAUGHT_AUTH0_DOMAIN;
 const auth0ClientId = process.env.CNAUGHT_AUTH0_CLIENT_ID;
 const auth0Audience = process.env.CNAUGHT_AUTH0_AUDIENCE;
 const apiUrl = process.env.CNAUGHT_API_URL;
+const appUrl = process.env.CNAUGHT_APP_URL;
 
 // Validate required vars at runtime (after esbuild replacement)
 if (!auth0Domain) throw new Error('Missing required: CNAUGHT_AUTH0_DOMAIN');
 if (!auth0ClientId) throw new Error('Missing required: CNAUGHT_AUTH0_CLIENT_ID');
 if (!auth0Audience) throw new Error('Missing required: CNAUGHT_AUTH0_AUDIENCE');
 if (!apiUrl) throw new Error('Missing required: CNAUGHT_API_URL');
+if (!appUrl) throw new Error('Missing required: CNAUGHT_APP_URL');
 
 export const CONFIG = {
     auth0Domain,
     auth0ClientId,
     auth0Audience,
-    apiUrl
+    apiUrl,
+    appUrl
 };

@@ -58,6 +58,8 @@ const entryPoints = [
     { in: 'src/scripts/carbon-sync.ts', out: 'scripts/carbon-sync' },
     { in: 'src/scripts/carbon-report.ts', out: 'scripts/carbon-report' },
     { in: 'src/scripts/browser-oauth.ts', out: 'scripts/browser-oauth' },
+    { in: 'src/scripts/carbon-create-org.ts', out: 'scripts/carbon-create-org' },
+    { in: 'src/scripts/carbon-uninstall.ts', out: 'scripts/carbon-uninstall' },
     { in: 'src/statusline/carbon-statusline.ts', out: 'statusline/carbon-statusline' },
 ];
 
@@ -70,6 +72,7 @@ for (const key of [
     'CNAUGHT_AUTH0_AUDIENCE',
     'CNAUGHT_API_URL',
     'CNAUGHT_SKIP_TLS_VERIFY',
+    'CNAUGHT_APP_URL',
 ]) {
     if (process.env[key]) {
         define[`process.env.${key}`] = JSON.stringify(process.env[key]);
