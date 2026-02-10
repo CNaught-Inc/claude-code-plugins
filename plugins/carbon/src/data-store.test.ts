@@ -4,19 +4,13 @@ import {
     initializeDatabase,
     upsertSession,
     getSession,
-    getUnsyncedSessions,
-    markSessionSynced,
     getAllSessionIds,
     sessionExists,
     getAggregateStats,
-    saveAuthConfig,
-    getAuthConfig,
-    updateAuthTokens,
-    saveOrganizationId,
     getInstalledAt,
     setInstalledAt
 } from './data-store';
-import type { AuthConfig, SessionRecord } from './data-store';
+import type { SessionRecord } from './data-store';
 
 function createTestDb(): Database {
     const db = new Database(':memory:');
@@ -24,7 +18,7 @@ function createTestDb(): Database {
     return db;
 }
 
-function makeSession(overrides: Partial<Omit<SessionRecord, 'syncedAt'>> = {}): Omit<SessionRecord, 'syncedAt'> {
+function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
         sessionId: 'session-1',
         projectPath: '/test/project',
@@ -42,20 +36,8 @@ function makeSession(overrides: Partial<Omit<SessionRecord, 'syncedAt'>> = {}): 
     };
 }
 
-function makeAuthConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
-    return {
-        accessToken: 'access-token-123',
-        refreshToken: 'refresh-token-456',
-        accessTokenExpiresAt: new Date('2025-12-31T00:00:00Z'),
-        refreshTokenExpiresAt: new Date('2026-01-30T00:00:00Z'),
-        organizationId: null,
-        updatedAt: new Date('2025-01-01T00:00:00Z'),
-        ...overrides
-    };
-}
-
 describe('initializeDatabase', () => {
-    it('creates sessions and auth_config tables', () => {
+    it('creates sessions and plugin_config tables', () => {
         const db = createTestDb();
         const tables = db
             .prepare("SELECT name FROM sqlite_master WHERE type='table'")
@@ -63,7 +45,7 @@ describe('initializeDatabase', () => {
         const tableNames = tables.map((t) => t.name);
 
         expect(tableNames).toContain('sessions');
-        expect(tableNames).toContain('auth_config');
+        expect(tableNames).toContain('plugin_config');
         db.close();
     });
 
@@ -76,35 +58,6 @@ describe('initializeDatabase', () => {
             .prepare("SELECT name FROM sqlite_master WHERE type='table'")
             .all() as { name: string }[];
         expect(tables.length).toBeGreaterThanOrEqual(2);
-        db.close();
-    });
-
-    it('drops old auth_config table with mcp_server_url column', () => {
-        const db = new Database(':memory:');
-        // Create old-style table with mcp_server_url
-        db.exec(`
-            CREATE TABLE auth_config (
-                id INTEGER PRIMARY KEY,
-                mcp_server_url TEXT,
-                access_token TEXT NOT NULL,
-                refresh_token TEXT NOT NULL,
-                access_token_expires_at TEXT NOT NULL,
-                refresh_token_expires_at TEXT NOT NULL,
-                organization_id TEXT,
-                updated_at TEXT NOT NULL
-            )
-        `);
-        db.prepare(
-            "INSERT INTO auth_config (id, mcp_server_url, access_token, refresh_token, access_token_expires_at, refresh_token_expires_at, updated_at) VALUES (1, 'http://old', 'tok', 'ref', '2025-01-01', '2025-02-01', '2025-01-01')"
-        ).run();
-
-        // initializeDatabase should drop and recreate without mcp_server_url
-        initializeDatabase(db);
-
-        const cols = db.prepare('PRAGMA table_info(auth_config)').all() as { name: string }[];
-        const colNames = cols.map((c) => c.name);
-        expect(colNames).not.toContain('mcp_server_url');
-        expect(colNames).toContain('access_token');
         db.close();
     });
 });
@@ -128,7 +81,6 @@ describe('upsertSession / getSession', () => {
         expect(retrieved!.energyWh).toBeCloseTo(0.05);
         expect(retrieved!.co2Grams).toBeCloseTo(0.015);
         expect(retrieved!.primaryModel).toBe('claude-sonnet-4-20250514');
-        expect(retrieved!.syncedAt).toBeNull();
         db.close();
     });
 
@@ -155,94 +107,6 @@ describe('upsertSession / getSession', () => {
         expect(retrieved!.totalTokens).toBe(3000);
         // createdAt should be preserved (from original insert)
         expect(retrieved!.createdAt.toISOString()).toBe('2025-01-01T00:00:00.000Z');
-        db.close();
-    });
-});
-
-describe('getUnsyncedSessions', () => {
-    it('returns sessions with null synced_at', () => {
-        const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        upsertSession(db, makeSession({ sessionId: 's2' }));
-
-        const unsynced = getUnsyncedSessions(db);
-        expect(unsynced).toHaveLength(2);
-        db.close();
-    });
-
-    it('filters by after date', () => {
-        const db = createTestDb();
-        upsertSession(db, makeSession({
-            sessionId: 'old',
-            createdAt: new Date('2024-01-01T00:00:00Z')
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 'new',
-            createdAt: new Date('2025-06-01T00:00:00Z')
-        }));
-
-        const cutoff = new Date('2025-01-01T00:00:00Z');
-        const unsynced = getUnsyncedSessions(db, cutoff);
-        expect(unsynced).toHaveLength(1);
-        expect(unsynced[0].sessionId).toBe('new');
-        db.close();
-    });
-
-    it('returns all when after is null', () => {
-        const db = createTestDb();
-        upsertSession(db, makeSession({
-            sessionId: 'old',
-            createdAt: new Date('2024-01-01T00:00:00Z')
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 'new',
-            createdAt: new Date('2025-06-01T00:00:00Z')
-        }));
-
-        const unsynced = getUnsyncedSessions(db, null);
-        expect(unsynced).toHaveLength(2);
-        db.close();
-    });
-
-    it('returns sessions updated after sync', () => {
-        const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        markSessionSynced(db, 's1');
-
-        // Update the session after syncing
-        upsertSession(db, makeSession({
-            sessionId: 's1',
-            inputTokens: 5000,
-            updatedAt: new Date('2099-01-01T00:00:00Z')
-        }));
-
-        const unsynced = getUnsyncedSessions(db);
-        expect(unsynced).toHaveLength(1);
-        expect(unsynced[0].sessionId).toBe('s1');
-        db.close();
-    });
-});
-
-describe('markSessionSynced', () => {
-    it('marks a session as synced', () => {
-        const db = createTestDb();
-        upsertSession(db, makeSession());
-        markSessionSynced(db, 'session-1');
-
-        const session = getSession(db, 'session-1');
-        expect(session!.syncedAt).not.toBeNull();
-        db.close();
-    });
-
-    it('excludes synced sessions from unsynced list', () => {
-        const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        upsertSession(db, makeSession({ sessionId: 's2' }));
-        markSessionSynced(db, 's1');
-
-        const unsynced = getUnsyncedSessions(db);
-        expect(unsynced).toHaveLength(1);
-        expect(unsynced[0].sessionId).toBe('s2');
         db.close();
     });
 });
@@ -281,8 +145,6 @@ describe('getAggregateStats', () => {
         expect(stats.totalTokens).toBe(0);
         expect(stats.totalEnergyWh).toBe(0);
         expect(stats.totalCO2Grams).toBe(0);
-        expect(stats.unsyncedSessions).toBe(0);
-        expect(stats.oldestUnsyncedAt).toBeNull();
         db.close();
     });
 
@@ -312,70 +174,6 @@ describe('getAggregateStats', () => {
         expect(stats.totalOutputTokens).toBe(1500);
         expect(stats.totalEnergyWh).toBeCloseTo(0.3);
         expect(stats.totalCO2Grams).toBeCloseTo(0.09);
-        expect(stats.unsyncedSessions).toBe(2);
-        db.close();
-    });
-});
-
-describe('saveAuthConfig / getAuthConfig', () => {
-    it('saves and retrieves auth config', () => {
-        const db = createTestDb();
-        const config = makeAuthConfig();
-
-        saveAuthConfig(db, config);
-        const retrieved = getAuthConfig(db);
-
-        expect(retrieved).not.toBeNull();
-        expect(retrieved!.accessToken).toBe('access-token-123');
-        expect(retrieved!.refreshToken).toBe('refresh-token-456');
-        expect(retrieved!.organizationId).toBeNull();
-        db.close();
-    });
-
-    it('returns null when no auth config exists', () => {
-        const db = createTestDb();
-        expect(getAuthConfig(db)).toBeNull();
-        db.close();
-    });
-
-    it('upserts on save (replaces existing)', () => {
-        const db = createTestDb();
-        saveAuthConfig(db, makeAuthConfig());
-        saveAuthConfig(db, makeAuthConfig({ accessToken: 'new-token' }));
-
-        const retrieved = getAuthConfig(db);
-        expect(retrieved!.accessToken).toBe('new-token');
-        db.close();
-    });
-});
-
-describe('updateAuthTokens', () => {
-    it('updates access and refresh tokens', () => {
-        const db = createTestDb();
-        saveAuthConfig(db, makeAuthConfig());
-
-        const newExpiry = new Date('2026-06-01T00:00:00Z');
-        const newRefreshExpiry = new Date('2026-07-01T00:00:00Z');
-        updateAuthTokens(db, 'new-access', 'new-refresh', newExpiry, newRefreshExpiry);
-
-        const retrieved = getAuthConfig(db);
-        expect(retrieved!.accessToken).toBe('new-access');
-        expect(retrieved!.refreshToken).toBe('new-refresh');
-        expect(retrieved!.accessTokenExpiresAt.toISOString()).toBe(newExpiry.toISOString());
-        expect(retrieved!.refreshTokenExpiresAt.toISOString()).toBe(newRefreshExpiry.toISOString());
-        db.close();
-    });
-});
-
-describe('saveOrganizationId', () => {
-    it('updates organization ID', () => {
-        const db = createTestDb();
-        saveAuthConfig(db, makeAuthConfig());
-
-        saveOrganizationId(db, 'org-789');
-
-        const retrieved = getAuthConfig(db);
-        expect(retrieved!.organizationId).toBe('org-789');
         db.close();
     });
 });

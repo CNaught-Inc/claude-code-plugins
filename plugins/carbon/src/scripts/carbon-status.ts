@@ -3,12 +3,10 @@
  *
  * Displays current carbon tracking status including:
  * - Local statistics (sessions, tokens, CO2)
- * - MCP integration status
  */
 
 import { formatCO2, formatEnergy } from '../carbon-calculator.js';
-import { getAggregateStats, getAuthConfig, initializeDatabase, openDatabase } from '../data-store.js';
-import { formatRelativeTime, isIntegrationConfigured } from '../sync-service.js';
+import { getAggregateStats, initializeDatabase, openDatabase } from '../data-store.js';
 import { logError } from '../utils/stdin.js';
 
 /**
@@ -30,7 +28,6 @@ async function main(): Promise<void> {
         const db = openDatabase();
         initializeDatabase(db);
         const stats = getAggregateStats(db);
-        const authConfig = getAuthConfig(db);
         db.close();
 
         console.log('Local Statistics:');
@@ -45,44 +42,6 @@ async function main(): Promise<void> {
         console.log(`  CO2 emitted:         ${formatCO2(stats.totalCO2Grams)}`);
         console.log('');
 
-        // Backend integration status
-        console.log('Backend Integration:');
-        console.log('----------------------------------------');
-        if (authConfig) {
-            const now = new Date();
-            const accessExpired = authConfig.accessTokenExpiresAt < now;
-            const refreshExpired = authConfig.refreshTokenExpiresAt < now;
-
-            if (authConfig.organizationId) {
-                console.log(`  Organization:        ${authConfig.organizationId}`);
-            }
-            if (refreshExpired) {
-                console.log('  Status:              Token expired');
-                console.log('  Run /carbon:setup to re-authenticate');
-            } else if (accessExpired) {
-                console.log('  Status:              Connected (will auto-refresh)');
-            } else {
-                console.log('  Status:              Connected');
-            }
-            console.log(`  Last updated:        ${formatRelativeTime(authConfig.updatedAt)}`);
-            console.log('');
-
-            console.log('Sync Status:');
-            console.log('----------------------------------------');
-            console.log(`  Unsynced sessions:   ${formatNumber(stats.unsyncedSessions)}`);
-            if (stats.oldestUnsyncedAt) {
-                console.log(
-                    `  Oldest unsynced:     ${formatRelativeTime(stats.oldestUnsyncedAt)}`
-                );
-            }
-        } else {
-            console.log('  Status:              Not configured');
-            console.log('');
-            console.log('  To enable backend integration:');
-            console.log('    Run /carbon:setup to authenticate with CNaught');
-        }
-
-        console.log('');
         console.log('========================================');
         console.log('\n');
     } catch (error) {

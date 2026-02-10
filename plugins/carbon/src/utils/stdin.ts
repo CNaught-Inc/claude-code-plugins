@@ -79,18 +79,31 @@ export type SessionEndInput = z.infer<typeof SessionEndInputSchema>;
 
 /**
  * Schema for statusline input
+ *
+ * Claude Code sends a rich JSON object to statusline commands.
+ * We only parse the fields we need and let Zod strip the rest.
  */
 export const StatuslineInputSchema = z.object({
     session_id: z.string().optional(),
-    usage: z
+    model: z
         .object({
-            input_tokens: z.number().optional(),
-            output_tokens: z.number().optional(),
-            cache_creation_input_tokens: z.number().optional(),
-            cache_read_input_tokens: z.number().optional()
+            id: z.string().optional(),
+            display_name: z.string().optional()
         })
         .optional(),
-    model: z.string().optional()
+    context_window: z
+        .object({
+            current_usage: z
+                .object({
+                    input_tokens: z.number().optional(),
+                    output_tokens: z.number().optional(),
+                    cache_creation_input_tokens: z.number().optional(),
+                    cache_read_input_tokens: z.number().optional()
+                })
+                .nullable()
+                .optional()
+        })
+        .optional()
 });
 
 export type StatuslineInput = z.infer<typeof StatuslineInputSchema>;

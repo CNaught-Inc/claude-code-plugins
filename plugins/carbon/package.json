@@ -2,7 +2,7 @@
     "name": "@cnaught-inc/claude-code-carbon",
     "version": "0.1.0",
     "private": true,
-    "description": "Claude Code plugin for tracking and offsetting carbon emissions from AI usage",
+    "description": "Claude Code plugin for tracking carbon emissions from AI usage",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
@@ -10,12 +10,9 @@
         "watch": "tsc --watch",
         "typecheck": "tsc --noEmit",
         "test": "jest --config jest.config.ts",
-        "test:oauth": "node build-test-oauth.mjs",
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "graphql-request": "^7.1.0",
-        "graphql": "^16.9.0",
         "zod": "^3.25.76"
     },
     "devDependencies": {

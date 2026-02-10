@@ -189,8 +189,7 @@ async function main(): Promise<void> {
 
         console.log('========================================');
         console.log('\n');
-        console.log('Tip: Run /carbon:setup to enable automatic');
-        console.log('     carbon offset purchases via CNaught.');
+        console.log('Tip: Run /carbon:status to see all-time stats.');
         console.log('\n');
     } catch (error) {
         logError('Failed to generate report', error);

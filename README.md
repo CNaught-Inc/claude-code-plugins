@@ -6,15 +6,14 @@ A monorepo of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plug
 
 ### Carbon Tracker (`plugins/carbon`)
 
-Track and offset carbon emissions from your Claude Code usage. This plugin estimates the carbon footprint of your AI sessions and enables automatic carbon offset purchasing through CNaught.
+Track and offset carbon emissions from your Claude Code usage
 
 **Features:**
 
 - Estimates carbon emissions per Claude Code session based on token usage
 - Stores session data locally via SQLite
-- Syncs emission data to CNaught for offset purchasing (via OAuth)
 - Provides status line integration showing session carbon impact
-- Includes CLI scripts for setup, reporting, and syncing
+- Includes scripts for setup, reporting, and syncing
 
 ## Development
 
