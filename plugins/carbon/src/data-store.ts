@@ -25,7 +25,6 @@ export interface SessionRecord {
     primaryModel: string;
     createdAt: Date;
     updatedAt: Date;
-    syncedAt: Date | null;
 }
 
 /**
@@ -40,8 +39,6 @@ export interface AggregateStats {
     totalCacheReadTokens: number;
     totalEnergyWh: number;
     totalCO2Grams: number;
-    unsyncedSessions: number;
-    oldestUnsyncedAt: Date | null;
 }
 
 /**
@@ -64,18 +61,6 @@ export interface ProjectStats {
     tokens: number;
     energyWh: number;
     co2Grams: number;
-}
-
-/**
- * Auth configuration for direct Auth0 integration
- */
-export interface AuthConfig {
-    accessToken: string;
-    refreshToken: string;
-    accessTokenExpiresAt: Date;
-    refreshTokenExpiresAt: Date;
-    organizationId: string | null;
-    updatedAt: Date;
 }
 
 /**
@@ -111,18 +96,9 @@ export function openDatabase(): Database {
  * Initialize the database schema
  */
 export function initializeDatabase(db: Database): void {
-    // Migrate old auth_config schema if it exists with MCP-specific columns
-    try {
-        const tableInfo = db.prepare('PRAGMA table_info(auth_config)').all() as { name: string }[];
-        if (tableInfo.length > 0) {
-            const hasOldColumn = tableInfo.some((col) => col.name === 'mcp_server_url');
-            if (hasOldColumn) {
-                db.exec('DROP TABLE auth_config');
-            }
-        }
-    } catch {
-        // Table doesn't exist yet, nothing to migrate
-    }
+    // Migration: clean up auth_config table and synced_at index from older versions
+    db.exec('DROP TABLE IF EXISTS auth_config');
+    db.exec('DROP INDEX IF EXISTS idx_sessions_synced_at');
 
     db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
@@ -137,23 +113,11 @@ export function initializeDatabase(db: Database): void {
             co2_grams REAL NOT NULL DEFAULT 0,
             primary_model TEXT NOT NULL DEFAULT 'unknown',
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            synced_at TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_sessions_synced_at ON sessions(synced_at);
-        CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
-        CREATE INDEX IF NOT EXISTS idx_sessions_project_path ON sessions(project_path);
-
-        CREATE TABLE IF NOT EXISTS auth_config (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            access_token TEXT NOT NULL,
-            refresh_token TEXT NOT NULL,
-            access_token_expires_at TEXT NOT NULL,
-            refresh_token_expires_at TEXT NOT NULL,
-            organization_id TEXT,
             updated_at TEXT NOT NULL
         );
+
+        CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_project_path ON sessions(project_path);
 
         CREATE TABLE IF NOT EXISTS plugin_config (
             key TEXT PRIMARY KEY,
@@ -168,7 +132,7 @@ export function initializeDatabase(db: Database): void {
  */
 export function upsertSession(
     db: Database,
-    session: Omit<SessionRecord, 'syncedAt'>
+    session: SessionRecord
 ): void {
     const stmt = db.prepare(`
         INSERT INTO sessions (
@@ -224,31 +188,6 @@ export function getSession(db: Database, sessionId: string): SessionRecord | nul
 }
 
 /**
- * Get all unsynced sessions, optionally filtered to those created after a given date
- */
-export function getUnsyncedSessions(db: Database, after?: Date | null): SessionRecord[] {
-    if (after) {
-        const stmt = db.prepare(
-            'SELECT * FROM sessions WHERE (synced_at IS NULL OR synced_at < updated_at) AND created_at >= ? ORDER BY created_at'
-        );
-        const rows = stmt.all(after.toISOString()) as Record<string, unknown>[];
-        return rows.map(rowToSession);
-    }
-
-    const stmt = db.prepare('SELECT * FROM sessions WHERE synced_at IS NULL OR synced_at < updated_at ORDER BY created_at');
-    const rows = stmt.all() as Record<string, unknown>[];
-    return rows.map(rowToSession);
-}
-
-/**
- * Mark a session as synced
- */
-export function markSessionSynced(db: Database, sessionId: string): void {
-    const stmt = db.prepare('UPDATE sessions SET synced_at = ? WHERE session_id = ?');
-    stmt.run(new Date().toISOString(), sessionId);
-}
-
-/**
  * Get all session IDs in the database
  */
 export function getAllSessionIds(db: Database): string[] {
@@ -278,9 +217,7 @@ export function getAggregateStats(db: Database): AggregateStats {
             COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation_tokens,
             COALESCE(SUM(cache_read_tokens), 0) as total_cache_read_tokens,
             COALESCE(SUM(energy_wh), 0) as total_energy_wh,
-            COALESCE(SUM(co2_grams), 0) as total_co2_grams,
-            SUM(CASE WHEN synced_at IS NULL OR synced_at < updated_at THEN 1 ELSE 0 END) as unsynced_sessions,
-            MIN(CASE WHEN synced_at IS NULL THEN updated_at WHEN synced_at < updated_at THEN synced_at END) as oldest_unsynced_at
+            COALESCE(SUM(co2_grams), 0) as total_co2_grams
         FROM sessions
     `);
 
@@ -294,11 +231,7 @@ export function getAggregateStats(db: Database): AggregateStats {
         totalCacheCreationTokens: Number(row.total_cache_creation_tokens),
         totalCacheReadTokens: Number(row.total_cache_read_tokens),
         totalEnergyWh: Number(row.total_energy_wh),
-        totalCO2Grams: Number(row.total_co2_grams),
-        unsyncedSessions: Number(row.unsynced_sessions),
-        oldestUnsyncedAt: row.oldest_unsynced_at
-            ? new Date(row.oldest_unsynced_at as string)
-            : null
+        totalCO2Grams: Number(row.total_co2_grams)
     };
 }
 
@@ -359,95 +292,6 @@ export function getProjectStats(db: Database, days: number = 7): ProjectStats[] 
 }
 
 /**
- * Save or update auth configuration (upsert with id=1)
- */
-export function saveAuthConfig(db: Database, config: AuthConfig): void {
-    const stmt = db.prepare(`
-        INSERT INTO auth_config (
-            id, access_token, refresh_token, access_token_expires_at,
-            refresh_token_expires_at, organization_id, updated_at
-        ) VALUES (
-            1, $accessToken, $refreshToken, $accessTokenExpiresAt,
-            $refreshTokenExpiresAt, $organizationId, $updatedAt
-        )
-        ON CONFLICT(id) DO UPDATE SET
-            access_token = excluded.access_token,
-            refresh_token = excluded.refresh_token,
-            access_token_expires_at = excluded.access_token_expires_at,
-            refresh_token_expires_at = excluded.refresh_token_expires_at,
-            organization_id = excluded.organization_id,
-            updated_at = excluded.updated_at
-    `);
-
-    stmt.run({
-        $accessToken: config.accessToken,
-        $refreshToken: config.refreshToken,
-        $accessTokenExpiresAt: config.accessTokenExpiresAt.toISOString(),
-        $refreshTokenExpiresAt: config.refreshTokenExpiresAt.toISOString(),
-        $organizationId: config.organizationId,
-        $updatedAt: config.updatedAt.toISOString()
-    });
-}
-
-/**
- * Get the current auth configuration
- */
-export function getAuthConfig(db: Database): AuthConfig | null {
-    const stmt = db.prepare('SELECT * FROM auth_config WHERE id = 1');
-    const row = stmt.get() as Record<string, unknown> | undefined;
-
-    if (!row) {
-        return null;
-    }
-
-    return {
-        accessToken: row.access_token as string,
-        refreshToken: row.refresh_token as string,
-        accessTokenExpiresAt: new Date(row.access_token_expires_at as string),
-        refreshTokenExpiresAt: new Date(row.refresh_token_expires_at as string),
-        organizationId: (row.organization_id as string) || null,
-        updatedAt: new Date(row.updated_at as string)
-    };
-}
-
-/**
- * Update the stored organization ID
- */
-export function saveOrganizationId(db: Database, organizationId: string): void {
-    const stmt = db.prepare('UPDATE auth_config SET organization_id = ?, updated_at = ? WHERE id = 1');
-    stmt.run(organizationId, new Date().toISOString());
-}
-
-/**
- * Update stored auth tokens (after refresh)
- */
-export function updateAuthTokens(
-    db: Database,
-    accessToken: string,
-    refreshToken: string,
-    accessTokenExpiresAt: Date,
-    refreshTokenExpiresAt: Date
-): void {
-    const stmt = db.prepare(`
-        UPDATE auth_config SET
-            access_token = ?,
-            refresh_token = ?,
-            access_token_expires_at = ?,
-            refresh_token_expires_at = ?,
-            updated_at = ?
-        WHERE id = 1
-    `);
-
-    stmt.run(
-        accessToken,
-        refreshToken,
-        accessTokenExpiresAt.toISOString(),
-        refreshTokenExpiresAt.toISOString(),
-        new Date().toISOString()
-    );
-}
-
-/**
  * Get the plugin installed-at timestamp
  */
 export function getInstalledAt(db: Database): Date | null {
@@ -482,7 +326,6 @@ function rowToSession(row: Record<string, unknown>): SessionRecord {
         co2Grams: Number(row.co2_grams),
         primaryModel: row.primary_model as string,
         createdAt: new Date(row.created_at as string),
-        updatedAt: new Date(row.updated_at as string),
-        syncedAt: row.synced_at ? new Date(row.synced_at as string) : null
+        updatedAt: new Date(row.updated_at as string)
     };
 }

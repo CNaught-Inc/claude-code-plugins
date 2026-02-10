@@ -32,7 +32,7 @@ Generate a carbon emissions report for recent usage.
 ## Script
 
 ```bash
-node scripts/bun-runner.js dist/scripts/carbon-report.js
+node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-report.js
 ```
 
 ## Example Output

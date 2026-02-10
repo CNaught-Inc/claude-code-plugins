@@ -1,17 +1,14 @@
 /**
  * Carbon Uninstall Script
  *
- * Removes all CNaught carbon tracking artifacts:
+ * Removes carbon tracking artifacts:
  * 1. Deletes the local SQLite database (~/.claude/carbon-tracker.db)
- * 2. Removes the statusline script (~/.claude/statusline-carbon.mjs)
- * 3. Removes the statusLine config from ~/.claude/settings.json
- * 4. Removes the plugin from ~/.claude/plugins/installed_plugins.json
+ * 2. Removes the statusline wrapper (~/.claude/statusline-carbon.mjs)
+ * 3. Removes the statusLine entry from ~/.claude/settings.json
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-
-const PLUGIN_ID = 'carbon@cnaught-plugins';
 
 function getClaudeDir(): string {
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
@@ -23,7 +20,6 @@ function main(): void {
     const dbPath = path.join(claudeDir, 'carbon-tracker.db');
     const statuslinePath = path.join(claudeDir, 'statusline-carbon.mjs');
     const settingsPath = path.join(claudeDir, 'settings.json');
-    const installedPluginsPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
 
     console.log('\n');
     console.log('========================================');
@@ -47,15 +43,13 @@ function main(): void {
         }
     }
 
-    // 2. Remove statusline script
+    // 2. Remove statusline wrapper
     if (fs.existsSync(statuslinePath)) {
         fs.unlinkSync(statuslinePath);
         console.log(`  Deleted statusline: ${statuslinePath}`);
-    } else {
-        console.log('  Statusline script not found (already removed)');
     }
 
-    // 3. Remove statusLine from settings.json
+    // 3. Remove statusLine from settings.json if it points to our script
     if (fs.existsSync(settingsPath)) {
         try {
             const content = fs.readFileSync(settingsPath, 'utf-8');
@@ -71,40 +65,14 @@ function main(): void {
                 delete settings.statusLine;
                 fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
                 console.log('  Removed statusLine from settings.json');
-            } else {
-                console.log('  Settings unchanged (statusLine not set by this plugin)');
             }
         } catch {
-            console.log('  Warning: Could not update settings.json');
-        }
-    }
-
-    // 4. Remove plugin from installed_plugins.json
-    if (fs.existsSync(installedPluginsPath)) {
-        try {
-            const content = fs.readFileSync(installedPluginsPath, 'utf-8');
-            const registry = JSON.parse(content) as { version: number; plugins: Record<string, unknown> };
-
-            if (registry.plugins && PLUGIN_ID in registry.plugins) {
-                delete registry.plugins[PLUGIN_ID];
-                fs.writeFileSync(installedPluginsPath, JSON.stringify(registry, null, 2));
-                console.log(`  Removed plugin from registry`);
-            } else {
-                console.log('  Plugin not found in registry (already removed)');
-            }
-        } catch {
-            console.log('  Warning: Could not update installed_plugins.json');
+            // Non-fatal
         }
     }
 
     console.log('\n');
     console.log('========================================');
-    console.log('  Uninstall Complete                    ');
-    console.log('========================================');
-    console.log('\n');
-    console.log('All carbon tracking data has been removed.');
-    console.log('Restart Claude Code to complete the uninstall.');
-    console.log('You can re-install at any time with /carbon:setup');
     console.log('\n');
 }
 

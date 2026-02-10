@@ -7,7 +7,7 @@ Show current carbon tracking status.
 Run the status script and display the output to the user:
 
 ```bash
-node scripts/bun-runner.js dist/scripts/carbon-status.js
+node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-status.js
 ```
 
 ## What it shows
@@ -17,15 +17,6 @@ node scripts/bun-runner.js dist/scripts/carbon-status.js
 - Total tokens used (input/output/cache creation/cache read)
 - Total energy consumption (Wh)
 - Total CO2 emissions (grams)
-
-### Backend Integration
-- Organization ID
-- Connection status (Connected / Connected (will auto-refresh) / Token expired / Not configured)
-- Last updated time
-
-### Sync Status (if connected)
-- Number of unsynced sessions
-- Oldest unsynced session time
 
 ## Example Output
 
@@ -45,22 +36,9 @@ Local Statistics:
   Energy consumed:     12.34 Wh
   CO2 emitted:        5.67g
 
-Backend Integration:
-----------------------------------------
-  Organization:        org_abc123
-  Status:              Connected
-  Last updated:        2 minutes ago
-
-Sync Status:
-----------------------------------------
-  Unsynced sessions:   3
-  Oldest unsynced:     1 hour ago
-
 ========================================
 ```
 
 ## Troubleshooting
 
-- If status shows "Not configured", run `/carbon:setup` to authenticate
-- If status shows "Token expired", run `/carbon:setup` to re-authenticate
-- If there are unsynced sessions, they will automatically sync at the end of your next session, or you can run `/carbon:sync` to sync manually
+- If the command fails, run `/carbon:setup` to initialize the tracker
