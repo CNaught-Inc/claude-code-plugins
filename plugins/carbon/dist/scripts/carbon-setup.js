@@ -4514,7 +4514,7 @@ process.exit(result.status ?? 0);
 function configureSettings() {
   const claudeDir = getClaudeDir();
   const settingsPath = path3.join(claudeDir, "settings.json");
-  const statuslinePath = path3.join(claudeDir, "statusline-carbon.cjs");
+  const statuslinePath = path3.join(claudeDir, "statusline-carbon.mjs");
   try {
     let settings = {};
     if (fs3.existsSync(settingsPath)) {
