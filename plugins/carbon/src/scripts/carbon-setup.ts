@@ -84,7 +84,7 @@ process.exit(result.status ?? 0);
 function configureSettings(): { success: boolean; message: string } {
     const claudeDir = getClaudeDir();
     const settingsPath = path.join(claudeDir, 'settings.json');
-    const statuslinePath = path.join(claudeDir, 'statusline-carbon.cjs');
+    const statuslinePath = path.join(claudeDir, 'statusline-carbon.mjs');
 
     try {
         let settings: Record<string, unknown> = {};
