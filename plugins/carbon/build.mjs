@@ -28,6 +28,7 @@ const entryPoints = [
     { in: 'src/scripts/carbon-report.ts', out: 'scripts/carbon-report' },
     { in: 'src/scripts/carbon-uninstall.ts', out: 'scripts/carbon-uninstall' },
     { in: 'src/statusline/carbon-statusline.ts', out: 'statusline/carbon-statusline' },
+    { in: 'src/statusline/statusline-wrapper.ts', out: 'statusline/statusline-wrapper' },
 ];
 
 // Bundle with esbuild

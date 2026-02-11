@@ -42,8 +42,18 @@ function getPluginRoot(): string {
 }
 
 /**
+ * Check if a statusLine command belongs to this plugin.
+ */
+function isCarbonStatusLine(command: string): boolean {
+    return command.includes('statusline-carbon') || command.includes('carbon-statusline');
+}
+
+/**
  * Configure project-level .claude/settings.local.json with the statusline command.
  * This ensures the statusline only appears in projects where the plugin is set up.
+ *
+ * If an existing non-carbon statusline is found, it is preserved and wrapped
+ * so both statuslines run together (original output | carbon output).
  */
 function configureSettings(): { success: boolean; message: string } {
     const projectDir = process.cwd();
@@ -51,8 +61,8 @@ function configureSettings(): { success: boolean; message: string } {
     const settingsPath = path.join(claudeProjectDir, 'settings.local.json');
     const pluginRoot = getPluginRoot();
     const bunRunner = path.join(pluginRoot, 'scripts', 'bun-runner.js');
-    const statuslineScript = path.join(pluginRoot, 'dist', 'statusline', 'carbon-statusline.js');
-    const command = `node ${bunRunner} ${statuslineScript}`;
+    const standaloneScript = path.join(pluginRoot, 'dist', 'statusline', 'carbon-statusline.js');
+    const wrapperScript = path.join(pluginRoot, 'dist', 'statusline', 'statusline-wrapper.js');
 
     try {
         let settings: Record<string, unknown> = {};
@@ -63,23 +73,28 @@ function configureSettings(): { success: boolean; message: string } {
         }
 
         const existingStatusLine = settings.statusLine as Record<string, unknown> | undefined;
-        if (
+        const hasExternalStatusLine =
             existingStatusLine &&
             typeof existingStatusLine === 'object' &&
             typeof existingStatusLine.command === 'string' &&
-            !existingStatusLine.command.includes('statusline-carbon') &&
-            !existingStatusLine.command.includes('carbon-statusline')
-        ) {
-            return {
-                success: false,
-                message: `Existing statusLine found in .claude/settings.local.json. Manually update to use: ${command}`
+            !isCarbonStatusLine(existingStatusLine.command);
+
+        if (hasExternalStatusLine) {
+            // Wrap the existing statusline: save the original and install the wrapper
+            settings._carbonOriginalStatusLine = { ...existingStatusLine };
+            const originalCommand = (existingStatusLine as { command: string }).command;
+            settings.statusLine = {
+                type: 'command',
+                command: `node ${bunRunner} ${wrapperScript} --original-command "${originalCommand}"`
+            };
+            console.log('  Existing statusline detected — wrapping to show both');
+        } else {
+            // No external statusline (or already ours): install standalone
+            settings.statusLine = {
+                type: 'command',
+                command: `node ${bunRunner} ${standaloneScript}`
             };
         }
-
-        settings.statusLine = {
-            type: 'command',
-            command
-        };
 
         if (!fs.existsSync(claudeProjectDir)) {
             fs.mkdirSync(claudeProjectDir, { recursive: true });
