@@ -2,13 +2,7 @@ name: Build Plugins
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'plugins/*/src/**'
-      - 'plugins/*/build.mjs'
-      - 'plugins/*/package.json'
   pull_request:
-    branches: [main]
 
 jobs:
   build:
