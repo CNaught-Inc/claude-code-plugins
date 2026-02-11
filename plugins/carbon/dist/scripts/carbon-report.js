@@ -66,6 +66,9 @@ function formatEnergy(wh) {
 var import_bun_sqlite = require("bun:sqlite");
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
+function encodeProjectPath(rawPath) {
+  return rawPath.replace(/\//g, "-");
+}
 function getDatabasePath() {
   const homeDir = process.env.HOME || process.env.USERPROFILE || "";
   return path.join(homeDir, ".claude", "carbon-tracker.db");
@@ -110,7 +113,35 @@ function initializeDatabase(db) {
         );
     `);
 }
-function getDailyStats(db, days = 7) {
+function getAggregateStats(db, projectPath) {
+  const whereClause = projectPath ? "WHERE project_path = ?" : "";
+  const stmt = db.prepare(`
+        SELECT
+            COUNT(*) as total_sessions,
+            COALESCE(SUM(total_tokens), 0) as total_tokens,
+            COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+            COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+            COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation_tokens,
+            COALESCE(SUM(cache_read_tokens), 0) as total_cache_read_tokens,
+            COALESCE(SUM(energy_wh), 0) as total_energy_wh,
+            COALESCE(SUM(co2_grams), 0) as total_co2_grams
+        FROM sessions
+        ${whereClause}
+    `);
+  const row = projectPath ? stmt.get(projectPath) : stmt.get();
+  return {
+    totalSessions: Number(row.total_sessions),
+    totalTokens: Number(row.total_tokens),
+    totalInputTokens: Number(row.total_input_tokens),
+    totalOutputTokens: Number(row.total_output_tokens),
+    totalCacheCreationTokens: Number(row.total_cache_creation_tokens),
+    totalCacheReadTokens: Number(row.total_cache_read_tokens),
+    totalEnergyWh: Number(row.total_energy_wh),
+    totalCO2Grams: Number(row.total_co2_grams)
+  };
+}
+function getDailyStats(db, days = 7, projectPath) {
+  const projectFilter = projectPath ? "AND project_path = ?" : "";
   const stmt = db.prepare(`
         SELECT
             DATE(created_at) as date,
@@ -120,10 +151,11 @@ function getDailyStats(db, days = 7) {
             SUM(co2_grams) as co2_grams
         FROM sessions
         WHERE created_at >= DATE('now', '-' || ? || ' days')
+        ${projectFilter}
         GROUP BY DATE(created_at)
         ORDER BY date
     `);
-  const rows = stmt.all(days);
+  const rows = projectPath ? stmt.all(days, projectPath) : stmt.all(days);
   return rows.map((row) => ({
     date: row.date,
     sessions: Number(row.sessions),
@@ -4216,6 +4248,8 @@ var SessionEndInputSchema = external_exports.object({
 });
 var StatuslineInputSchema = external_exports.object({
   session_id: external_exports.string().optional(),
+  project_path: external_exports.string().optional(),
+  cwd: external_exports.string().optional(),
   model: external_exports.object({
     id: external_exports.string().optional(),
     display_name: external_exports.string().optional()
@@ -4259,17 +4293,30 @@ function getProjectName(projectPath) {
 }
 async function main() {
   console.log("\n");
+  console.log("\n");
   console.log("========================================");
   console.log("  CNaught Carbon Emissions Report      ");
-  console.log("  Last 7 Days                          ");
   console.log("========================================");
   console.log("\n");
   try {
     const db = openDatabase();
     initializeDatabase(db);
-    const dailyStats = getDailyStats(db, 7);
+    const encodedPath = encodeProjectPath(process.cwd());
+    const allTimeStats = getAggregateStats(db, encodedPath);
+    const dailyStats = getDailyStats(db, 7, encodedPath);
     const projectStats = getProjectStats(db, 7);
     db.close();
+    console.log("All-Time Project Statistics:");
+    console.log("----------------------------------------");
+    console.log(`  Sessions tracked:    ${formatNumber(allTimeStats.totalSessions)}`);
+    console.log(`  Total tokens:        ${formatNumber(allTimeStats.totalTokens)}`);
+    console.log(`    Input:             ${formatNumber(allTimeStats.totalInputTokens)}`);
+    console.log(`    Output:            ${formatNumber(allTimeStats.totalOutputTokens)}`);
+    console.log(`    Cache creation:    ${formatNumber(allTimeStats.totalCacheCreationTokens)}`);
+    console.log(`    Cache read:        ${formatNumber(allTimeStats.totalCacheReadTokens)}`);
+    console.log(`  Energy consumed:     ${formatEnergy(allTimeStats.totalEnergyWh)}`);
+    console.log(`  CO2 emitted:         ${formatCO2(allTimeStats.totalCO2Grams)}`);
+    console.log("");
     const totals = dailyStats.reduce(
       (acc, day) => ({
         sessions: acc.sessions + day.sessions,
@@ -4279,7 +4326,7 @@ async function main() {
       }),
       { sessions: 0, tokens: 0, energyWh: 0, co2Grams: 0 }
     );
-    console.log("Summary:");
+    console.log("Last 7 Days:");
     console.log("----------------------------------------");
     console.log(`  Sessions:      ${formatNumber(totals.sessions)}`);
     console.log(`  Tokens:        ${formatNumber(totals.tokens)}`);
@@ -4330,7 +4377,7 @@ async function main() {
     }
     if (projectStats.length > 0) {
       const totalProjectCO2 = projectStats.reduce((sum, p) => sum + p.co2Grams, 0);
-      console.log("Projects:");
+      console.log("All Projects:");
       console.log("----------------------------------------");
       const topProjects = projectStats.slice(0, 5);
       for (const project of topProjects) {
@@ -4349,8 +4396,6 @@ async function main() {
       console.log("");
     }
     console.log("========================================");
-    console.log("\n");
-    console.log("Tip: Run /carbon:status to see all-time stats.");
     console.log("\n");
   } catch (error) {
     logError("Failed to generate report", error);

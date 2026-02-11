@@ -4161,6 +4161,8 @@ var SessionEndInputSchema = external_exports.object({
 });
 var StatuslineInputSchema = external_exports.object({
   session_id: external_exports.string().optional(),
+  project_path: external_exports.string().optional(),
+  cwd: external_exports.string().optional(),
   model: external_exports.object({
     id: external_exports.string().optional(),
     display_name: external_exports.string().optional()

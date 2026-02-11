@@ -27,129 +27,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// src/carbon-calculator.ts
-var MODEL_CONFIGS = {
-  // Opus models
-  "claude-opus-4-5-20251101": {
-    whPer1000Tokens: 0.03,
-    displayName: "Claude Opus 4.5",
-    family: "opus"
-  },
-  "claude-opus-4-20250514": {
-    whPer1000Tokens: 0.028,
-    displayName: "Claude Opus 4",
-    family: "opus"
-  },
-  "claude-3-opus-20240229": {
-    whPer1000Tokens: 0.025,
-    displayName: "Claude 3 Opus",
-    family: "opus"
-  },
-  // Sonnet models
-  "claude-sonnet-4-20250514": {
-    whPer1000Tokens: 0.015,
-    displayName: "Claude Sonnet 4",
-    family: "sonnet"
-  },
-  "claude-3-5-sonnet-20241022": {
-    whPer1000Tokens: 0.014,
-    displayName: "Claude 3.5 Sonnet",
-    family: "sonnet"
-  },
-  "claude-3-5-sonnet-20240620": {
-    whPer1000Tokens: 0.014,
-    displayName: "Claude 3.5 Sonnet",
-    family: "sonnet"
-  },
-  "claude-3-sonnet-20240229": {
-    whPer1000Tokens: 0.012,
-    displayName: "Claude 3 Sonnet",
-    family: "sonnet"
-  },
-  // Haiku models
-  "claude-3-5-haiku-20241022": {
-    whPer1000Tokens: 6e-3,
-    displayName: "Claude 3.5 Haiku",
-    family: "haiku"
-  },
-  "claude-3-haiku-20240307": {
-    whPer1000Tokens: 5e-3,
-    displayName: "Claude 3 Haiku",
-    family: "haiku"
-  }
-};
-var DEFAULT_MODEL_CONFIG = {
-  whPer1000Tokens: 0.015,
-  // Assume Sonnet-level consumption
-  displayName: "Unknown Model",
-  family: "unknown"
-};
-function getModelConfig(modelId) {
-  if (MODEL_CONFIGS[modelId]) {
-    return MODEL_CONFIGS[modelId];
-  }
-  const lowerModel = modelId.toLowerCase();
-  if (lowerModel.includes("opus")) {
-    return { ...DEFAULT_MODEL_CONFIG, family: "opus", whPer1000Tokens: 0.028 };
-  }
-  if (lowerModel.includes("sonnet")) {
-    return { ...DEFAULT_MODEL_CONFIG, family: "sonnet", whPer1000Tokens: 0.015 };
-  }
-  if (lowerModel.includes("haiku")) {
-    return { ...DEFAULT_MODEL_CONFIG, family: "haiku", whPer1000Tokens: 5e-3 };
-  }
-  return DEFAULT_MODEL_CONFIG;
-}
-var CARBON_INTENSITY_GCO2_PER_KWH = 300;
-var PUE = 1.2;
-function calculateEnergy(tokens, modelConfig = DEFAULT_MODEL_CONFIG) {
-  const energyWh = tokens / 1e3 * modelConfig.whPer1000Tokens * PUE;
-  return {
-    energyWh,
-    energyKwh: energyWh / 1e3
-  };
-}
-function calculateCO2FromEnergy(energyWh) {
-  return energyWh / 1e3 * CARBON_INTENSITY_GCO2_PER_KWH;
-}
-function calculateCarbonFromTokens(inputTokens, outputTokens, cacheCreationTokens = 0, cacheReadTokens = 0, model = "unknown") {
-  const modelConfig = getModelConfig(model);
-  const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
-  const energy = calculateEnergy(totalTokens, modelConfig);
-  const co2Grams = calculateCO2FromEnergy(energy.energyWh);
-  return {
-    energy,
-    co2Grams,
-    co2Kg: co2Grams / 1e3,
-    modelBreakdown: {
-      [modelConfig.family]: {
-        energyWh: energy.energyWh,
-        co2Grams
-      }
-    }
-  };
-}
-function formatCO2(grams) {
-  if (grams < 0.01) {
-    return "< 0.01g";
-  }
-  if (grams < 1) {
-    return `${grams.toFixed(2)}g`;
-  }
-  if (grams < 1e3) {
-    return `${grams.toFixed(2)}g`;
-  }
-  return `${(grams / 1e3).toFixed(3)}kg`;
-}
-
-// src/data-store.ts
-var import_bun_sqlite = require("bun:sqlite");
-var path = __toESM(require("path"));
-function getDatabasePath() {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-  return path.join(homeDir, ".claude", "carbon-tracker.db");
-}
-
 // ../../node_modules/.bun/zod@3.25.76/node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -4235,6 +4112,8 @@ var SessionEndInputSchema = external_exports.object({
 });
 var StatuslineInputSchema = external_exports.object({
   session_id: external_exports.string().optional(),
+  project_path: external_exports.string().optional(),
+  cwd: external_exports.string().optional(),
   model: external_exports.object({
     id: external_exports.string().optional(),
     display_name: external_exports.string().optional()
@@ -4249,9 +4128,135 @@ var StatuslineInputSchema = external_exports.object({
   }).optional()
 });
 
-// src/statusline/carbon-statusline.ts
+// src/carbon-calculator.ts
+var MODEL_CONFIGS = {
+  // Opus models
+  "claude-opus-4-5-20251101": {
+    whPer1000Tokens: 0.03,
+    displayName: "Claude Opus 4.5",
+    family: "opus"
+  },
+  "claude-opus-4-20250514": {
+    whPer1000Tokens: 0.028,
+    displayName: "Claude Opus 4",
+    family: "opus"
+  },
+  "claude-3-opus-20240229": {
+    whPer1000Tokens: 0.025,
+    displayName: "Claude 3 Opus",
+    family: "opus"
+  },
+  // Sonnet models
+  "claude-sonnet-4-20250514": {
+    whPer1000Tokens: 0.015,
+    displayName: "Claude Sonnet 4",
+    family: "sonnet"
+  },
+  "claude-3-5-sonnet-20241022": {
+    whPer1000Tokens: 0.014,
+    displayName: "Claude 3.5 Sonnet",
+    family: "sonnet"
+  },
+  "claude-3-5-sonnet-20240620": {
+    whPer1000Tokens: 0.014,
+    displayName: "Claude 3.5 Sonnet",
+    family: "sonnet"
+  },
+  "claude-3-sonnet-20240229": {
+    whPer1000Tokens: 0.012,
+    displayName: "Claude 3 Sonnet",
+    family: "sonnet"
+  },
+  // Haiku models
+  "claude-3-5-haiku-20241022": {
+    whPer1000Tokens: 6e-3,
+    displayName: "Claude 3.5 Haiku",
+    family: "haiku"
+  },
+  "claude-3-haiku-20240307": {
+    whPer1000Tokens: 5e-3,
+    displayName: "Claude 3 Haiku",
+    family: "haiku"
+  }
+};
+var DEFAULT_MODEL_CONFIG = {
+  whPer1000Tokens: 0.015,
+  // Assume Sonnet-level consumption
+  displayName: "Unknown Model",
+  family: "unknown"
+};
+function getModelConfig(modelId) {
+  if (MODEL_CONFIGS[modelId]) {
+    return MODEL_CONFIGS[modelId];
+  }
+  const lowerModel = modelId.toLowerCase();
+  if (lowerModel.includes("opus")) {
+    return { ...DEFAULT_MODEL_CONFIG, family: "opus", whPer1000Tokens: 0.028 };
+  }
+  if (lowerModel.includes("sonnet")) {
+    return { ...DEFAULT_MODEL_CONFIG, family: "sonnet", whPer1000Tokens: 0.015 };
+  }
+  if (lowerModel.includes("haiku")) {
+    return { ...DEFAULT_MODEL_CONFIG, family: "haiku", whPer1000Tokens: 5e-3 };
+  }
+  return DEFAULT_MODEL_CONFIG;
+}
+var CARBON_INTENSITY_GCO2_PER_KWH = 300;
+var PUE = 1.2;
+function calculateEnergy(tokens, modelConfig = DEFAULT_MODEL_CONFIG) {
+  const energyWh = tokens / 1e3 * modelConfig.whPer1000Tokens * PUE;
+  return {
+    energyWh,
+    energyKwh: energyWh / 1e3
+  };
+}
+function calculateCO2FromEnergy(energyWh) {
+  return energyWh / 1e3 * CARBON_INTENSITY_GCO2_PER_KWH;
+}
+function calculateCarbonFromTokens(inputTokens, outputTokens, cacheCreationTokens = 0, cacheReadTokens = 0, model = "unknown") {
+  const modelConfig = getModelConfig(model);
+  const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+  const energy = calculateEnergy(totalTokens, modelConfig);
+  const co2Grams = calculateCO2FromEnergy(energy.energyWh);
+  return {
+    energy,
+    co2Grams,
+    co2Kg: co2Grams / 1e3,
+    modelBreakdown: {
+      [modelConfig.family]: {
+        energyWh: energy.energyWh,
+        co2Grams
+      }
+    }
+  };
+}
+function formatCO2(grams) {
+  if (grams < 0.01) {
+    return "< 0.01g";
+  }
+  if (grams < 1) {
+    return `${grams.toFixed(2)}g`;
+  }
+  if (grams < 1e3) {
+    return `${grams.toFixed(2)}g`;
+  }
+  return `${(grams / 1e3).toFixed(3)}kg`;
+}
+
+// src/data-store.ts
+var import_bun_sqlite = require("bun:sqlite");
+var path = __toESM(require("path"));
+function encodeProjectPath(rawPath) {
+  return rawPath.replace(/\//g, "-");
+}
+function getDatabasePath() {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  return path.join(homeDir, ".claude", "carbon-tracker.db");
+}
+
+// src/statusline/carbon-output.ts
 var fs = __toESM(require("fs"));
-function getTotalCO2FromDb() {
+function getTotalCO2FromDb(projectPath) {
   try {
     const dbPath = getDatabasePath();
     if (!fs.existsSync(dbPath)) {
@@ -4259,42 +4264,51 @@ function getTotalCO2FromDb() {
     }
     const { Database: Database2 } = require("bun:sqlite");
     const db = new Database2(dbPath, { readonly: true });
-    const row = db.prepare("SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions").get();
+    let row;
+    if (projectPath) {
+      row = db.prepare("SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_path = ?").get(projectPath);
+    } else {
+      row = db.prepare("SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions").get();
+    }
     db.close();
     return row.total;
   } catch {
     return null;
   }
 }
+function getCarbonOutput(input) {
+  const usage = input.context_window?.current_usage || {};
+  const rawProjectPath = input.project_path || input.cwd;
+  const encodedPath = rawProjectPath ? encodeProjectPath(rawProjectPath) : void 0;
+  const inputTokens = usage.input_tokens || 0;
+  const outputTokens = usage.output_tokens || 0;
+  const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+  const cacheReadTokens = usage.cache_read_input_tokens || 0;
+  const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+  if (totalTokens === 0) {
+    const totalCO22 = getTotalCO2FromDb(encodedPath);
+    if (totalCO22 !== null && totalCO22 > 0) {
+      return `\u{1F331} session: 0g \xB7 total: ${formatCO2(totalCO22)} CO\u2082`;
+    }
+    return "";
+  }
+  const carbon = calculateCarbonFromTokens(
+    inputTokens,
+    outputTokens,
+    cacheCreationTokens,
+    cacheReadTokens,
+    input.model?.id || "unknown"
+  );
+  const totalCO2 = getTotalCO2FromDb(encodedPath);
+  const allSuffix = totalCO2 !== null && totalCO2 > 0 ? ` \xB7 total: ${formatCO2(totalCO2)}` : "";
+  return `\u{1F331} session: ${formatCO2(carbon.co2Grams)}${allSuffix} CO\u2082`;
+}
+
+// src/statusline/carbon-statusline.ts
 async function main() {
   try {
     const input = await readStdinJson(StatuslineInputSchema);
-    const usage = input.context_window?.current_usage || {};
-    const inputTokens = usage.input_tokens || 0;
-    const outputTokens = usage.output_tokens || 0;
-    const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
-    const cacheReadTokens = usage.cache_read_input_tokens || 0;
-    const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
-    if (totalTokens === 0) {
-      const totalCO22 = getTotalCO2FromDb();
-      if (totalCO22 !== null && totalCO22 > 0) {
-        console.log(`\u{1F331} session: 0g \xB7 total: ${formatCO2(totalCO22)} CO\u2082`);
-      } else {
-        console.log("");
-      }
-      return;
-    }
-    const carbon = calculateCarbonFromTokens(
-      inputTokens,
-      outputTokens,
-      cacheCreationTokens,
-      cacheReadTokens,
-      input.model?.id || "unknown"
-    );
-    const totalCO2 = getTotalCO2FromDb();
-    const allSuffix = totalCO2 !== null && totalCO2 > 0 ? ` \xB7 total: ${formatCO2(totalCO2)}` : "";
-    const output = `\u{1F331} session: ${formatCO2(carbon.co2Grams)}${allSuffix} CO\u2082`;
-    console.log(output);
+    console.log(getCarbonOutput(input));
   } catch {
     console.log("");
   }

@@ -27,209 +27,8 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// src/carbon-calculator.ts
-var MODEL_CONFIGS = {
-  // Opus models
-  "claude-opus-4-5-20251101": {
-    whPer1000Tokens: 0.03,
-    displayName: "Claude Opus 4.5",
-    family: "opus"
-  },
-  "claude-opus-4-20250514": {
-    whPer1000Tokens: 0.028,
-    displayName: "Claude Opus 4",
-    family: "opus"
-  },
-  "claude-3-opus-20240229": {
-    whPer1000Tokens: 0.025,
-    displayName: "Claude 3 Opus",
-    family: "opus"
-  },
-  // Sonnet models
-  "claude-sonnet-4-20250514": {
-    whPer1000Tokens: 0.015,
-    displayName: "Claude Sonnet 4",
-    family: "sonnet"
-  },
-  "claude-3-5-sonnet-20241022": {
-    whPer1000Tokens: 0.014,
-    displayName: "Claude 3.5 Sonnet",
-    family: "sonnet"
-  },
-  "claude-3-5-sonnet-20240620": {
-    whPer1000Tokens: 0.014,
-    displayName: "Claude 3.5 Sonnet",
-    family: "sonnet"
-  },
-  "claude-3-sonnet-20240229": {
-    whPer1000Tokens: 0.012,
-    displayName: "Claude 3 Sonnet",
-    family: "sonnet"
-  },
-  // Haiku models
-  "claude-3-5-haiku-20241022": {
-    whPer1000Tokens: 6e-3,
-    displayName: "Claude 3.5 Haiku",
-    family: "haiku"
-  },
-  "claude-3-haiku-20240307": {
-    whPer1000Tokens: 5e-3,
-    displayName: "Claude 3 Haiku",
-    family: "haiku"
-  }
-};
-var DEFAULT_MODEL_CONFIG = {
-  whPer1000Tokens: 0.015,
-  // Assume Sonnet-level consumption
-  displayName: "Unknown Model",
-  family: "unknown"
-};
-function getModelConfig(modelId) {
-  if (MODEL_CONFIGS[modelId]) {
-    return MODEL_CONFIGS[modelId];
-  }
-  const lowerModel = modelId.toLowerCase();
-  if (lowerModel.includes("opus")) {
-    return { ...DEFAULT_MODEL_CONFIG, family: "opus", whPer1000Tokens: 0.028 };
-  }
-  if (lowerModel.includes("sonnet")) {
-    return { ...DEFAULT_MODEL_CONFIG, family: "sonnet", whPer1000Tokens: 0.015 };
-  }
-  if (lowerModel.includes("haiku")) {
-    return { ...DEFAULT_MODEL_CONFIG, family: "haiku", whPer1000Tokens: 5e-3 };
-  }
-  return DEFAULT_MODEL_CONFIG;
-}
-var CARBON_INTENSITY_GCO2_PER_KWH = 300;
-var PUE = 1.2;
-function calculateEnergy(tokens, modelConfig = DEFAULT_MODEL_CONFIG) {
-  const energyWh = tokens / 1e3 * modelConfig.whPer1000Tokens * PUE;
-  return {
-    energyWh,
-    energyKwh: energyWh / 1e3
-  };
-}
-function calculateCO2FromEnergy(energyWh) {
-  return energyWh / 1e3 * CARBON_INTENSITY_GCO2_PER_KWH;
-}
-function calculateSessionCarbon(session) {
-  const modelBreakdown = {};
-  let totalEnergyWh = 0;
-  let totalCO2 = 0;
-  for (const [model, tokens] of Object.entries(session.modelBreakdown)) {
-    const modelConfig = getModelConfig(model);
-    const energy = calculateEnergy(tokens, modelConfig);
-    const co2 = calculateCO2FromEnergy(energy.energyWh);
-    totalEnergyWh += energy.energyWh;
-    totalCO2 += co2;
-    const family = modelConfig.family;
-    if (!modelBreakdown[family]) {
-      modelBreakdown[family] = { energyWh: 0, co2Grams: 0 };
-    }
-    modelBreakdown[family].energyWh += energy.energyWh;
-    modelBreakdown[family].co2Grams += co2;
-  }
-  return {
-    energy: {
-      energyWh: totalEnergyWh,
-      energyKwh: totalEnergyWh / 1e3
-    },
-    co2Grams: totalCO2,
-    co2Kg: totalCO2 / 1e3,
-    modelBreakdown
-  };
-}
-
-// src/data-store.ts
-var import_bun_sqlite = require("bun:sqlite");
-var fs = __toESM(require("fs"));
-var path = __toESM(require("path"));
-function getDatabasePath() {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-  return path.join(homeDir, ".claude", "carbon-tracker.db");
-}
-function ensureDbDirectory() {
-  const dbPath = getDatabasePath();
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-}
-function openDatabase() {
-  ensureDbDirectory();
-  const dbPath = getDatabasePath();
-  return new import_bun_sqlite.Database(dbPath);
-}
-function initializeDatabase(db) {
-  db.exec("DROP TABLE IF EXISTS auth_config");
-  db.exec("DROP INDEX IF EXISTS idx_sessions_synced_at");
-  db.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-            session_id TEXT PRIMARY KEY,
-            project_path TEXT NOT NULL,
-            input_tokens INTEGER NOT NULL DEFAULT 0,
-            output_tokens INTEGER NOT NULL DEFAULT 0,
-            cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
-            cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-            total_tokens INTEGER NOT NULL DEFAULT 0,
-            energy_wh REAL NOT NULL DEFAULT 0,
-            co2_grams REAL NOT NULL DEFAULT 0,
-            primary_model TEXT NOT NULL DEFAULT 'unknown',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
-        CREATE INDEX IF NOT EXISTS idx_sessions_project_path ON sessions(project_path);
-
-        CREATE TABLE IF NOT EXISTS plugin_config (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
-    `);
-}
-function upsertSession(db, session) {
-  const stmt = db.prepare(`
-        INSERT INTO sessions (
-            session_id, project_path, input_tokens, output_tokens,
-            cache_creation_tokens, cache_read_tokens, total_tokens,
-            energy_wh, co2_grams, primary_model, created_at, updated_at
-        ) VALUES (
-            $sessionId, $projectPath, $inputTokens, $outputTokens,
-            $cacheCreationTokens, $cacheReadTokens, $totalTokens,
-            $energyWh, $co2Grams, $primaryModel, $createdAt, $updatedAt
-        )
-        ON CONFLICT(session_id) DO UPDATE SET
-            project_path = excluded.project_path,
-            input_tokens = excluded.input_tokens,
-            output_tokens = excluded.output_tokens,
-            cache_creation_tokens = excluded.cache_creation_tokens,
-            cache_read_tokens = excluded.cache_read_tokens,
-            total_tokens = excluded.total_tokens,
-            energy_wh = excluded.energy_wh,
-            co2_grams = excluded.co2_grams,
-            primary_model = excluded.primary_model,
-            updated_at = excluded.updated_at
-    `);
-  stmt.run({
-    $sessionId: session.sessionId,
-    $projectPath: session.projectPath,
-    $inputTokens: session.inputTokens,
-    $outputTokens: session.outputTokens,
-    $cacheCreationTokens: session.cacheCreationTokens,
-    $cacheReadTokens: session.cacheReadTokens,
-    $totalTokens: session.totalTokens,
-    $energyWh: session.energyWh,
-    $co2Grams: session.co2Grams,
-    $primaryModel: session.primaryModel,
-    $createdAt: session.createdAt.toISOString(),
-    $updatedAt: session.updatedAt.toISOString()
-  });
-}
-
-// src/session-parser.ts
-var fs2 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+// src/statusline/statusline-wrapper.ts
+var import_child_process = require("child_process");
 
 // ../../node_modules/.bun/zod@3.25.76/node_modules/zod/v3/external.js
 var external_exports = {};
@@ -709,8 +508,8 @@ function getErrorMap() {
 
 // ../../node_modules/.bun/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path3, errorMaps, issueData } = params;
-  const fullPath = [...path3, ...issueData.path || []];
+  const { data, path: path2, errorMaps, issueData } = params;
+  const fullPath = [...path2, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -826,11 +625,11 @@ var errorUtil;
 
 // ../../node_modules/.bun/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path3, key) {
+  constructor(parent, value, path2, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path3;
+    this._path = path2;
     this._key = key;
   }
   get path() {
@@ -4272,146 +4071,6 @@ var coerce = {
 };
 var NEVER = INVALID;
 
-// src/session-parser.ts
-var TranscriptEntrySchema = external_exports.object({
-  type: external_exports.string(),
-  sessionId: external_exports.string().optional(),
-  parentMessageId: external_exports.string().optional(),
-  message: external_exports.object({
-    model: external_exports.string().optional(),
-    usage: external_exports.object({
-      input_tokens: external_exports.number().optional(),
-      output_tokens: external_exports.number().optional(),
-      cache_creation_input_tokens: external_exports.number().optional(),
-      cache_read_input_tokens: external_exports.number().optional()
-    }).optional()
-  }).optional(),
-  uuid: external_exports.string().optional()
-});
-function parseJsonlFile(filePath) {
-  if (!fs2.existsSync(filePath)) {
-    return [];
-  }
-  const content = fs2.readFileSync(filePath, "utf-8");
-  const lines = content.split("\n").filter((line) => line.trim());
-  const records = [];
-  const seenRequestIds = /* @__PURE__ */ new Set();
-  for (const line of lines) {
-    try {
-      const entry = JSON.parse(line);
-      const parsed = TranscriptEntrySchema.safeParse(entry);
-      if (!parsed.success) {
-        continue;
-      }
-      const data = parsed.data;
-      if (data.type !== "assistant" || !data.message?.usage) {
-        continue;
-      }
-      const requestId = data.uuid || data.parentMessageId || `${Date.now()}-${Math.random()}`;
-      if (seenRequestIds.has(requestId)) {
-        continue;
-      }
-      seenRequestIds.add(requestId);
-      const usage = data.message.usage;
-      records.push({
-        requestId,
-        model: data.message.model || "unknown",
-        inputTokens: usage.input_tokens || 0,
-        outputTokens: usage.output_tokens || 0,
-        cacheCreationTokens: usage.cache_creation_input_tokens || 0,
-        cacheReadTokens: usage.cache_read_input_tokens || 0,
-        timestamp: /* @__PURE__ */ new Date()
-      });
-    } catch {
-      continue;
-    }
-  }
-  return records;
-}
-function findSubagentFiles(sessionDir) {
-  const subagentsDir = path2.join(sessionDir, "subagents");
-  if (!fs2.existsSync(subagentsDir)) {
-    return [];
-  }
-  try {
-    const files = fs2.readdirSync(subagentsDir);
-    return files.filter((f) => f.startsWith("agent-") && f.endsWith(".jsonl")).map((f) => path2.join(subagentsDir, f));
-  } catch {
-    return [];
-  }
-}
-function getClaudeProjectsDir() {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-  return path2.join(homeDir, ".claude", "projects");
-}
-function findTranscriptPath(sessionId, projectPath) {
-  const projectsDir = getClaudeProjectsDir();
-  if (projectPath) {
-    const encodedPath = projectPath.replace(/\//g, "-");
-    const projectDir = path2.join(projectsDir, encodedPath);
-    const transcriptPath = path2.join(projectDir, `${sessionId}.jsonl`);
-    if (fs2.existsSync(transcriptPath)) {
-      return transcriptPath;
-    }
-  }
-  if (fs2.existsSync(projectsDir)) {
-    try {
-      const projectDirs = fs2.readdirSync(projectsDir);
-      for (const dir of projectDirs) {
-        const transcriptPath = path2.join(projectsDir, dir, `${sessionId}.jsonl`);
-        if (fs2.existsSync(transcriptPath)) {
-          return transcriptPath;
-        }
-      }
-    } catch {
-    }
-  }
-  return null;
-}
-function parseSession(transcriptPath) {
-  const sessionDir = path2.dirname(transcriptPath);
-  const sessionId = path2.basename(transcriptPath, ".jsonl");
-  const projectsDir = getClaudeProjectsDir();
-  const projectPath = path2.relative(projectsDir, sessionDir);
-  const mainRecords = parseJsonlFile(transcriptPath);
-  const subagentFiles = findSubagentFiles(path2.join(sessionDir, sessionId));
-  const subagentRecords = subagentFiles.flatMap((f) => parseJsonlFile(f));
-  const allRecords = [...mainRecords, ...subagentRecords];
-  const totals = allRecords.reduce(
-    (acc, record) => ({
-      inputTokens: acc.inputTokens + record.inputTokens,
-      outputTokens: acc.outputTokens + record.outputTokens,
-      cacheCreationTokens: acc.cacheCreationTokens + record.cacheCreationTokens,
-      cacheReadTokens: acc.cacheReadTokens + record.cacheReadTokens,
-      totalTokens: acc.totalTokens + record.inputTokens + record.outputTokens + record.cacheCreationTokens + record.cacheReadTokens
-    }),
-    {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
-      totalTokens: 0
-    }
-  );
-  const modelBreakdown = {};
-  for (const record of allRecords) {
-    const totalForRecord = record.inputTokens + record.outputTokens + record.cacheCreationTokens + record.cacheReadTokens;
-    modelBreakdown[record.model] = (modelBreakdown[record.model] || 0) + totalForRecord;
-  }
-  const primaryModel = Object.entries(modelBreakdown).sort(([, a], [, b]) => b - a)[0]?.[0] || "unknown";
-  const stat = fs2.statSync(transcriptPath);
-  return {
-    sessionId,
-    projectPath,
-    records: allRecords,
-    totals,
-    modelBreakdown,
-    primaryModel,
-    createdAt: stat.birthtime,
-    updatedAt: stat.mtime
-  };
-}
-
 // src/utils/stdin.ts
 async function readStdin() {
   return new Promise((resolve, reject) => {
@@ -4428,14 +4087,6 @@ async function readStdin() {
       resolve("");
     }
   });
-}
-async function readStdinJson(schema) {
-  const data = await readStdin();
-  if (!data.trim()) {
-    throw new Error("No input received from stdin");
-  }
-  const json = JSON.parse(data);
-  return schema.parse(json);
 }
 var SessionStartInputSchema = external_exports.object({
   session_id: external_exports.string(),
@@ -4471,65 +4122,221 @@ var StatuslineInputSchema = external_exports.object({
     }).nullable().optional()
   }).optional()
 });
-function log(message) {
-  console.error(`[carbon-tracker] ${message}`);
+
+// src/carbon-calculator.ts
+var MODEL_CONFIGS = {
+  // Opus models
+  "claude-opus-4-5-20251101": {
+    whPer1000Tokens: 0.03,
+    displayName: "Claude Opus 4.5",
+    family: "opus"
+  },
+  "claude-opus-4-20250514": {
+    whPer1000Tokens: 0.028,
+    displayName: "Claude Opus 4",
+    family: "opus"
+  },
+  "claude-3-opus-20240229": {
+    whPer1000Tokens: 0.025,
+    displayName: "Claude 3 Opus",
+    family: "opus"
+  },
+  // Sonnet models
+  "claude-sonnet-4-20250514": {
+    whPer1000Tokens: 0.015,
+    displayName: "Claude Sonnet 4",
+    family: "sonnet"
+  },
+  "claude-3-5-sonnet-20241022": {
+    whPer1000Tokens: 0.014,
+    displayName: "Claude 3.5 Sonnet",
+    family: "sonnet"
+  },
+  "claude-3-5-sonnet-20240620": {
+    whPer1000Tokens: 0.014,
+    displayName: "Claude 3.5 Sonnet",
+    family: "sonnet"
+  },
+  "claude-3-sonnet-20240229": {
+    whPer1000Tokens: 0.012,
+    displayName: "Claude 3 Sonnet",
+    family: "sonnet"
+  },
+  // Haiku models
+  "claude-3-5-haiku-20241022": {
+    whPer1000Tokens: 6e-3,
+    displayName: "Claude 3.5 Haiku",
+    family: "haiku"
+  },
+  "claude-3-haiku-20240307": {
+    whPer1000Tokens: 5e-3,
+    displayName: "Claude 3 Haiku",
+    family: "haiku"
+  }
+};
+var DEFAULT_MODEL_CONFIG = {
+  whPer1000Tokens: 0.015,
+  // Assume Sonnet-level consumption
+  displayName: "Unknown Model",
+  family: "unknown"
+};
+function getModelConfig(modelId) {
+  if (MODEL_CONFIGS[modelId]) {
+    return MODEL_CONFIGS[modelId];
+  }
+  const lowerModel = modelId.toLowerCase();
+  if (lowerModel.includes("opus")) {
+    return { ...DEFAULT_MODEL_CONFIG, family: "opus", whPer1000Tokens: 0.028 };
+  }
+  if (lowerModel.includes("sonnet")) {
+    return { ...DEFAULT_MODEL_CONFIG, family: "sonnet", whPer1000Tokens: 0.015 };
+  }
+  if (lowerModel.includes("haiku")) {
+    return { ...DEFAULT_MODEL_CONFIG, family: "haiku", whPer1000Tokens: 5e-3 };
+  }
+  return DEFAULT_MODEL_CONFIG;
 }
-function logError(message, error) {
-  const errorDetails = error instanceof Error ? error.message : String(error);
-  console.error(`[carbon-tracker] ERROR: ${message}${error ? ` - ${errorDetails}` : ""}`);
+var CARBON_INTENSITY_GCO2_PER_KWH = 300;
+var PUE = 1.2;
+function calculateEnergy(tokens, modelConfig = DEFAULT_MODEL_CONFIG) {
+  const energyWh = tokens / 1e3 * modelConfig.whPer1000Tokens * PUE;
+  return {
+    energyWh,
+    energyKwh: energyWh / 1e3
+  };
+}
+function calculateCO2FromEnergy(energyWh) {
+  return energyWh / 1e3 * CARBON_INTENSITY_GCO2_PER_KWH;
+}
+function calculateCarbonFromTokens(inputTokens, outputTokens, cacheCreationTokens = 0, cacheReadTokens = 0, model = "unknown") {
+  const modelConfig = getModelConfig(model);
+  const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+  const energy = calculateEnergy(totalTokens, modelConfig);
+  const co2Grams = calculateCO2FromEnergy(energy.energyWh);
+  return {
+    energy,
+    co2Grams,
+    co2Kg: co2Grams / 1e3,
+    modelBreakdown: {
+      [modelConfig.family]: {
+        energyWh: energy.energyWh,
+        co2Grams
+      }
+    }
+  };
+}
+function formatCO2(grams) {
+  if (grams < 0.01) {
+    return "< 0.01g";
+  }
+  if (grams < 1) {
+    return `${grams.toFixed(2)}g`;
+  }
+  if (grams < 1e3) {
+    return `${grams.toFixed(2)}g`;
+  }
+  return `${(grams / 1e3).toFixed(3)}kg`;
 }
 
-// src/hooks/stop.ts
-async function main() {
+// src/data-store.ts
+var import_bun_sqlite = require("bun:sqlite");
+var path = __toESM(require("path"));
+function encodeProjectPath(rawPath) {
+  return rawPath.replace(/\//g, "-");
+}
+function getDatabasePath() {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  return path.join(homeDir, ".claude", "carbon-tracker.db");
+}
+
+// src/statusline/carbon-output.ts
+var fs = __toESM(require("fs"));
+function getTotalCO2FromDb(projectPath) {
   try {
-    let input;
-    try {
-      input = await readStdinJson(StopInputSchema);
-    } catch {
-      log("No input received, skipping");
-      return;
+    const dbPath = getDatabasePath();
+    if (!fs.existsSync(dbPath)) {
+      return null;
     }
-    const { session_id, project_path, transcript_path } = input;
-    const actualTranscriptPath = transcript_path || findTranscriptPath(session_id, project_path);
-    if (!actualTranscriptPath) {
-      log(`No transcript found for session ${session_id}`);
-      return;
+    const { Database: Database2 } = require("bun:sqlite");
+    const db = new Database2(dbPath, { readonly: true });
+    let row;
+    if (projectPath) {
+      row = db.prepare("SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_path = ?").get(projectPath);
+    } else {
+      row = db.prepare("SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions").get();
     }
-    const sessionUsage = parseSession(actualTranscriptPath);
-    if (sessionUsage.totals.totalTokens === 0) {
-      log(`No token usage found for session ${session_id}`);
-      return;
-    }
-    const carbon = calculateSessionCarbon(sessionUsage);
-    const db = openDatabase();
-    try {
-      initializeDatabase(db);
-      upsertSession(db, {
-        sessionId: session_id,
-        projectPath: sessionUsage.projectPath,
-        inputTokens: sessionUsage.totals.inputTokens,
-        outputTokens: sessionUsage.totals.outputTokens,
-        cacheCreationTokens: sessionUsage.totals.cacheCreationTokens,
-        cacheReadTokens: sessionUsage.totals.cacheReadTokens,
-        totalTokens: sessionUsage.totals.totalTokens,
-        energyWh: carbon.energy.energyWh,
-        co2Grams: carbon.co2Grams,
-        primaryModel: sessionUsage.primaryModel,
-        createdAt: sessionUsage.createdAt,
-        updatedAt: sessionUsage.updatedAt
-      });
-      log(
-        `Saved session ${session_id}: ${sessionUsage.totals.totalTokens} tokens, ${carbon.co2Grams.toFixed(3)}g CO2`
-      );
-    } finally {
-      db.close();
-    }
-  } catch (error) {
-    logError("Failed to save session", error);
+    db.close();
+    return row.total;
+  } catch {
+    return null;
   }
 }
-main().catch((error) => {
-  logError("Unexpected error", error);
-  process.exit(0);
-});
-//# sourceMappingURL=stop.js.map
+function getCarbonOutput(input) {
+  const usage = input.context_window?.current_usage || {};
+  const rawProjectPath = input.project_path || input.cwd;
+  const encodedPath = rawProjectPath ? encodeProjectPath(rawProjectPath) : void 0;
+  const inputTokens = usage.input_tokens || 0;
+  const outputTokens = usage.output_tokens || 0;
+  const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+  const cacheReadTokens = usage.cache_read_input_tokens || 0;
+  const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
+  if (totalTokens === 0) {
+    const totalCO22 = getTotalCO2FromDb(encodedPath);
+    if (totalCO22 !== null && totalCO22 > 0) {
+      return `\u{1F331} session: 0g \xB7 total: ${formatCO2(totalCO22)} CO\u2082`;
+    }
+    return "";
+  }
+  const carbon = calculateCarbonFromTokens(
+    inputTokens,
+    outputTokens,
+    cacheCreationTokens,
+    cacheReadTokens,
+    input.model?.id || "unknown"
+  );
+  const totalCO2 = getTotalCO2FromDb(encodedPath);
+  const allSuffix = totalCO2 !== null && totalCO2 > 0 ? ` \xB7 total: ${formatCO2(totalCO2)}` : "";
+  return `\u{1F331} session: ${formatCO2(carbon.co2Grams)}${allSuffix} CO\u2082`;
+}
+
+// src/statusline/statusline-wrapper.ts
+function getOriginalCommand() {
+  const args = process.argv.slice(2);
+  const idx = args.indexOf("--original-command");
+  return idx !== -1 ? args[idx + 1] : void 0;
+}
+function runOriginalCommand(command, stdinData) {
+  try {
+    const result = (0, import_child_process.spawnSync)("sh", ["-c", command], {
+      input: stdinData,
+      encoding: "utf-8",
+      timeout: 5e3,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    return (result.stdout || "").trim();
+  } catch {
+    return "";
+  }
+}
+async function main() {
+  try {
+    const stdinData = await readStdin();
+    const originalCommand = getOriginalCommand();
+    let originalOutput = "";
+    if (originalCommand) {
+      originalOutput = runOriginalCommand(originalCommand, stdinData);
+    }
+    let carbonOutput = "";
+    try {
+      const input = StatuslineInputSchema.parse(JSON.parse(stdinData));
+      carbonOutput = getCarbonOutput(input);
+    } catch {
+    }
+    const parts = [originalOutput, carbonOutput].filter(Boolean);
+    console.log(parts.join(" | "));
+  } catch {
+    console.log("");
+  }
+}
+main();
+//# sourceMappingURL=statusline-wrapper.js.map
