@@ -13,7 +13,26 @@ Track and offset carbon emissions from your Claude Code usage
 - Estimates carbon emissions per Claude Code session based on token usage
 - Stores session data locally via SQLite
 - Provides status line integration showing session carbon impact
-- Includes scripts for setup, reporting, and syncing
+- Includes commands for setup and reporting
+
+## Installation
+
+Add the marketplace and install the carbon plugin in Claude Code:
+
+```
+/plugin marketplace add CNaught-Inc/claude-code-plugins
+/plugin install carbon@cnaught-plugins
+```
+
+Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
+
+### Updating
+
+To pull the latest plugin version:
+
+```
+/plugin marketplace update cnaught-plugins
+```
 
 ## Development
 
@@ -50,7 +69,7 @@ plugins/
 
 ### CI
 
-On push to `main` and on pull requests, GitHub Actions will typecheck, test, and build to validate changes.
+On push and pull requests, GitHub Actions will typecheck, test, and build to validate changes.
 
 ### Releasing
 
