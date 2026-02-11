@@ -72,7 +72,23 @@ function configureSettings(): { success: boolean; message: string } {
             settings = JSON.parse(content);
         }
 
-        const existingStatusLine = settings.statusLine as Record<string, unknown> | undefined;
+        // Check for existing statusline in project settings first, then global
+        let existingStatusLine = settings.statusLine as Record<string, unknown> | undefined;
+        if (!existingStatusLine || typeof existingStatusLine !== 'object') {
+            // Check global settings (Claude Code cascades: project > global)
+            const globalSettingsPath = path.join(getClaudeDir(), 'settings.json');
+            try {
+                if (fs.existsSync(globalSettingsPath)) {
+                    const globalContent = fs.readFileSync(globalSettingsPath, 'utf-8');
+                    const globalSettings = JSON.parse(globalContent);
+                    if (globalSettings.statusLine && typeof globalSettings.statusLine === 'object') {
+                        existingStatusLine = globalSettings.statusLine as Record<string, unknown>;
+                    }
+                }
+            } catch {
+                // Non-critical, ignore
+            }
+        }
         const hasExternalStatusLine =
             existingStatusLine &&
             typeof existingStatusLine === 'object' &&
