@@ -14,6 +14,7 @@ import {
     formatEnergy
 } from '../carbon-calculator.js';
 import {
+    encodeProjectPath,
     getDailyStats,
     getProjectStats,
     initializeDatabase,
@@ -73,10 +74,11 @@ async function main(): Promise<void> {
         const db = openDatabase();
         initializeDatabase(db);
 
-        // Get daily stats
-        const dailyStats = getDailyStats(db, 7);
+        // Get daily stats for current project
+        const encodedPath = encodeProjectPath(process.cwd());
+        const dailyStats = getDailyStats(db, 7, encodedPath);
 
-        // Get project stats
+        // Get project stats (all projects for comparison)
         const projectStats = getProjectStats(db, 7);
 
         db.close();
@@ -92,8 +94,8 @@ async function main(): Promise<void> {
             { sessions: 0, tokens: 0, energyWh: 0, co2Grams: 0 }
         );
 
-        // Summary section
-        console.log('Summary:');
+        // Summary section (current project)
+        console.log('Project Summary:');
         console.log('----------------------------------------');
         console.log(`  Sessions:      ${formatNumber(totals.sessions)}`);
         console.log(`  Tokens:        ${formatNumber(totals.tokens)}`);
@@ -153,11 +155,11 @@ async function main(): Promise<void> {
             console.log('');
         }
 
-        // Project breakdown
+        // All projects breakdown (for comparison)
         if (projectStats.length > 0) {
             const totalProjectCO2 = projectStats.reduce((sum, p) => sum + p.co2Grams, 0);
 
-            console.log('Projects:');
+            console.log('All Projects:');
             console.log('----------------------------------------');
 
             // Show top 5 projects
@@ -189,7 +191,7 @@ async function main(): Promise<void> {
 
         console.log('========================================');
         console.log('\n');
-        console.log('Tip: Run /carbon:status to see all-time stats.');
+        console.log('Tip: Run /carbon:status to see all-time project stats.');
         console.log('\n');
     } catch (error) {
         logError('Failed to generate report', error);

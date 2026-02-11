@@ -64,6 +64,15 @@ export interface ProjectStats {
 }
 
 /**
+ * Encode a raw project path to the format stored in the database.
+ * Claude Code stores transcripts under ~/.claude/projects/<encoded-path>/
+ * where slashes are replaced with dashes.
+ */
+export function encodeProjectPath(rawPath: string): string {
+    return rawPath.replace(/\//g, '-');
+}
+
+/**
  * Get the database file path
  */
 export function getDatabasePath(): string {
@@ -201,13 +210,14 @@ export function getAllSessionIds(db: Database): string[] {
  */
 export function sessionExists(db: Database, sessionId: string): boolean {
     const stmt = db.prepare('SELECT 1 FROM sessions WHERE session_id = ?');
-    return stmt.get(sessionId) !== undefined;
+    return stmt.get(sessionId) != null;
 }
 
 /**
  * Get aggregate statistics
  */
-export function getAggregateStats(db: Database): AggregateStats {
+export function getAggregateStats(db: Database, projectPath?: string): AggregateStats {
+    const whereClause = projectPath ? 'WHERE project_path = ?' : '';
     const stmt = db.prepare(`
         SELECT
             COUNT(*) as total_sessions,
@@ -219,9 +229,10 @@ export function getAggregateStats(db: Database): AggregateStats {
             COALESCE(SUM(energy_wh), 0) as total_energy_wh,
             COALESCE(SUM(co2_grams), 0) as total_co2_grams
         FROM sessions
+        ${whereClause}
     `);
 
-    const row = stmt.get() as Record<string, unknown>;
+    const row = (projectPath ? stmt.get(projectPath) : stmt.get()) as Record<string, unknown>;
 
     return {
         totalSessions: Number(row.total_sessions),
@@ -238,7 +249,8 @@ export function getAggregateStats(db: Database): AggregateStats {
 /**
  * Get daily statistics for the last N days
  */
-export function getDailyStats(db: Database, days: number = 7): DailyStats[] {
+export function getDailyStats(db: Database, days: number = 7, projectPath?: string): DailyStats[] {
+    const projectFilter = projectPath ? 'AND project_path = ?' : '';
     const stmt = db.prepare(`
         SELECT
             DATE(created_at) as date,
@@ -248,11 +260,12 @@ export function getDailyStats(db: Database, days: number = 7): DailyStats[] {
             SUM(co2_grams) as co2_grams
         FROM sessions
         WHERE created_at >= DATE('now', '-' || ? || ' days')
+        ${projectFilter}
         GROUP BY DATE(created_at)
         ORDER BY date
     `);
 
-    const rows = stmt.all(days) as Record<string, unknown>[];
+    const rows = (projectPath ? stmt.all(days, projectPath) : stmt.all(days)) as Record<string, unknown>[];
 
     return rows.map((row) => ({
         date: row.date as string,

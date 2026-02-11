@@ -23,11 +23,11 @@
  */
 
 import { calculateCarbonFromTokens, formatCO2 } from '../carbon-calculator.js';
-import { getDatabasePath } from '../data-store.js';
+import { encodeProjectPath, getDatabasePath } from '../data-store.js';
 import { readStdinJson, StatuslineInputSchema } from '../utils/stdin.js';
 import * as fs from 'fs';
 
-function getTotalCO2FromDb(): number | null {
+function getTotalCO2FromDb(projectPath?: string): number | null {
     try {
         const dbPath = getDatabasePath();
         if (!fs.existsSync(dbPath)) {
@@ -35,7 +35,12 @@ function getTotalCO2FromDb(): number | null {
         }
         const { Database } = require('bun:sqlite');
         const db = new Database(dbPath, { readonly: true });
-        const row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions').get() as { total: number };
+        let row: { total: number };
+        if (projectPath) {
+            row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_path = ?').get(projectPath) as { total: number };
+        } else {
+            row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions').get() as { total: number };
+        }
         db.close();
         return row.total;
     } catch {
@@ -48,6 +53,10 @@ async function main(): Promise<void> {
         const input = await readStdinJson(StatuslineInputSchema);
         const usage = input.context_window?.current_usage || {};
 
+        // Derive encoded project path for DB filtering
+        const rawProjectPath = input.project_path || input.cwd;
+        const encodedPath = rawProjectPath ? encodeProjectPath(rawProjectPath) : undefined;
+
         const inputTokens = usage.input_tokens || 0;
         const outputTokens = usage.output_tokens || 0;
         const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
@@ -57,7 +66,7 @@ async function main(): Promise<void> {
 
         if (totalTokens === 0) {
             // No tokens yet, but still show total if available
-            const totalCO2 = getTotalCO2FromDb();
+            const totalCO2 = getTotalCO2FromDb(encodedPath);
             if (totalCO2 !== null && totalCO2 > 0) {
                 console.log(`\u{1F331} session: 0g \u00b7 total: ${formatCO2(totalCO2)} CO\u2082`);
             } else {
@@ -74,8 +83,8 @@ async function main(): Promise<void> {
             input.model?.id || 'unknown'
         );
 
-        // Get total from all tracked sessions
-        const totalCO2 = getTotalCO2FromDb();
+        // Get total from tracked sessions for this project
+        const totalCO2 = getTotalCO2FromDb(encodedPath);
         const allSuffix = totalCO2 !== null && totalCO2 > 0
             ? ` \u00b7 total: ${formatCO2(totalCO2)}`
             : '';
