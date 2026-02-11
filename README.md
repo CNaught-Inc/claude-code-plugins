@@ -54,17 +54,12 @@ On push to `main` and on pull requests, GitHub Actions will typecheck, test, and
 
 ### Releasing
 
-Releases are triggered by pushing a `v*` tag (e.g., `v1.0.0`) on the `main` branch:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+Releases are triggered manually via workflow dispatch via github UI or CLI.
 
 The release workflow will:
 
-1. Verify the tag is on `main`
-2. Typecheck, test, and build
-3. Bump plugin versions in `marketplace.json` and each plugin's `plugin.json`
-4. Commit the built `dist/` and version bumps to `main`
+1. Typecheck, test, and build on `main`
+2. Bump plugin versions in `marketplace.json` and each plugin's `plugin.json`
+3. Commit the built `dist/` and version bumps to `main`
+4. Tag the release commit (e.g., `v1.0.0`)
 5. Create a GitHub Release with auto-generated notes
