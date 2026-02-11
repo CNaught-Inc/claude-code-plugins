@@ -24,16 +24,6 @@
                     }
                 ]
             }
-        ],
-        "SessionEnd": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/hooks/session-end.js"
-                    }
-                ]
-            }
         ]
     }
 }
