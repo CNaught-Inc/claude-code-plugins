@@ -25,7 +25,6 @@ const entryPoints = [
     { in: 'src/hooks/session-start.ts', out: 'hooks/session-start' },
     { in: 'src/hooks/stop.ts', out: 'hooks/stop' },
     { in: 'src/scripts/carbon-setup.ts', out: 'scripts/carbon-setup' },
-    { in: 'src/scripts/carbon-status.ts', out: 'scripts/carbon-status' },
     { in: 'src/scripts/carbon-report.ts', out: 'scripts/carbon-report' },
     { in: 'src/scripts/carbon-uninstall.ts', out: 'scripts/carbon-uninstall' },
     { in: 'src/statusline/carbon-statusline.ts', out: 'statusline/carbon-statusline' },

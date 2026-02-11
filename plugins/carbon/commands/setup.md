@@ -33,7 +33,7 @@ This will:
 ### Step 3: Verify setup
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-status.js
+node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-report.js
 ```
 
 Show the output to the user and confirm that the database is initialized, the statusline is installed, and CO2 tracking is active.

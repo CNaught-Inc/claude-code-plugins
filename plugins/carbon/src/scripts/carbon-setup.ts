@@ -230,7 +230,6 @@ async function main(): Promise<void> {
         console.log('You will see CO2 emissions in your status bar.');
         console.log('\n');
         console.log('Commands:');
-        console.log('  /carbon:status  - View tracking status');
         console.log('  /carbon:report  - View emissions report');
         console.log('\n');
     } catch (error) {

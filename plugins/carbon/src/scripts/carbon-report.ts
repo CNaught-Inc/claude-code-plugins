@@ -1,7 +1,8 @@
 /**
  * Carbon Report Script
  *
- * Generates a carbon emissions report for recent usage:
+ * Generates a carbon emissions report including:
+ * - All-time project statistics
  * - 7-day summary
  * - Daily breakdown with chart
  * - Relatable equivalents
@@ -15,6 +16,7 @@ import {
 } from '../carbon-calculator.js';
 import {
     encodeProjectPath,
+    getAggregateStats,
     getDailyStats,
     getProjectStats,
     initializeDatabase,
@@ -64,9 +66,9 @@ function getProjectName(projectPath: string): string {
 
 async function main(): Promise<void> {
     console.log('\n');
+    console.log('\n');
     console.log('========================================');
     console.log('  CNaught Carbon Emissions Report      ');
-    console.log('  Last 7 Days                          ');
     console.log('========================================');
     console.log('\n');
 
@@ -74,8 +76,12 @@ async function main(): Promise<void> {
         const db = openDatabase();
         initializeDatabase(db);
 
-        // Get daily stats for current project
         const encodedPath = encodeProjectPath(process.cwd());
+
+        // All-time project stats
+        const allTimeStats = getAggregateStats(db, encodedPath);
+
+        // Get daily stats for current project
         const dailyStats = getDailyStats(db, 7, encodedPath);
 
         // Get project stats (all projects for comparison)
@@ -83,7 +89,20 @@ async function main(): Promise<void> {
 
         db.close();
 
-        // Calculate totals
+        // All-time section
+        console.log('All-Time Project Statistics:');
+        console.log('----------------------------------------');
+        console.log(`  Sessions tracked:    ${formatNumber(allTimeStats.totalSessions)}`);
+        console.log(`  Total tokens:        ${formatNumber(allTimeStats.totalTokens)}`);
+        console.log(`    Input:             ${formatNumber(allTimeStats.totalInputTokens)}`);
+        console.log(`    Output:            ${formatNumber(allTimeStats.totalOutputTokens)}`);
+        console.log(`    Cache creation:    ${formatNumber(allTimeStats.totalCacheCreationTokens)}`);
+        console.log(`    Cache read:        ${formatNumber(allTimeStats.totalCacheReadTokens)}`);
+        console.log(`  Energy consumed:     ${formatEnergy(allTimeStats.totalEnergyWh)}`);
+        console.log(`  CO2 emitted:         ${formatCO2(allTimeStats.totalCO2Grams)}`);
+        console.log('');
+
+        // Calculate 7-day totals
         const totals = dailyStats.reduce(
             (acc, day) => ({
                 sessions: acc.sessions + day.sessions,
@@ -94,8 +113,8 @@ async function main(): Promise<void> {
             { sessions: 0, tokens: 0, energyWh: 0, co2Grams: 0 }
         );
 
-        // Summary section (current project)
-        console.log('Project Summary:');
+        // 7-day summary section
+        console.log('Last 7 Days:');
         console.log('----------------------------------------');
         console.log(`  Sessions:      ${formatNumber(totals.sessions)}`);
         console.log(`  Tokens:        ${formatNumber(totals.tokens)}`);
@@ -190,8 +209,6 @@ async function main(): Promise<void> {
         }
 
         console.log('========================================');
-        console.log('\n');
-        console.log('Tip: Run /carbon:status to see all-time project stats.');
         console.log('\n');
     } catch (error) {
         logError('Failed to generate report', error);

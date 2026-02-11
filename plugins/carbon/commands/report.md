@@ -1,6 +1,6 @@
 # /carbon:report
 
-Generate a carbon emissions report for recent usage.
+Generate a carbon emissions report.
 
 ## Usage
 
@@ -9,6 +9,12 @@ Generate a carbon emissions report for recent usage.
 ```
 
 ## What it shows
+
+### All-Time Project Statistics
+- Total sessions tracked
+- Total tokens used (input/output/cache creation/cache read)
+- Total energy consumption (Wh)
+- Total CO2 emissions (grams)
 
 ### 7-Day Summary
 - Number of sessions
@@ -33,37 +39,4 @@ Generate a carbon emissions report for recent usage.
 
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-report.js
-```
-
-## Example Output
-
-```
-CNaught Carbon Emissions Report (Last 7 Days)
-=============================================
-
-Summary:
-  Sessions: 28
-  Tokens: 856,432
-  Energy: 8.56 Wh
-  CO2: 3.94g
-
-Equivalents:
-  This is roughly equivalent to:
-  - Driving 0.03 km in a car
-  - Charging your phone 0.3 times
-  - Running an LED bulb for 52 minutes
-
-Daily Breakdown:
-  Mon: 0.52g  ####
-  Tue: 0.71g  #####
-  Wed: 0.45g  ###
-  Thu: 0.89g  #######
-  Fri: 0.62g  ####
-  Sat: 0.38g  ###
-  Sun: 0.37g  ###
-
-Projects:
-  frontend-monorepo              2.45g (62%)
-  backend-api                    1.12g (28%)
-  other                          0.37g (10%)
 ```
