@@ -9,7 +9,7 @@
         "build": "node build.mjs",
         "watch": "tsc --watch",
         "typecheck": "tsc --noEmit",
-        "test": "jest --config jest.config.ts",
+        "test": "bun test",
         "clean": "rm -rf dist"
     },
     "dependencies": {
@@ -18,13 +18,9 @@
     "devDependencies": {
         "@types/better-sqlite3": "^7.6.12",
         "@types/bun": "latest",
-        "@types/jest": "^29.5.0",
         "@types/node": "^20.17.9",
         "better-sqlite3": "^11.0.0",
         "esbuild": "^0.24.0",
-        "ts-node": "^10.9.0",
-        "ts-jest": "^29.1.0",
-        "jest": "^30.0.0",
         "typescript": "5.9.3"
     }
 }
