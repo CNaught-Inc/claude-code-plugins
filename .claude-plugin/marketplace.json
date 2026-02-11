@@ -10,7 +10,7 @@
       "name": "carbon",
       "description": "Track and offset carbon emissions from your Claude Code usage",
       "source": "./plugins/carbon",
-      "version": "1.4.0-alpha"
+      "version": "1.4.1-alpha"
     }
   ]
 }
