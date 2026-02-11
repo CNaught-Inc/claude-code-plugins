@@ -50,4 +50,21 @@ plugins/
 
 ### CI
 
-On push to `main`, GitHub Actions will build, test, and auto-commit the `dist/` directories so plugins can be installed directly from the repo without a build step.
+On push to `main` and on pull requests, GitHub Actions will typecheck, test, and build to validate changes.
+
+### Releasing
+
+Releases are triggered by pushing a `v*` tag (e.g., `v1.0.0`) on the `main` branch:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow will:
+
+1. Verify the tag is on `main`
+2. Typecheck, test, and build
+3. Bump plugin versions in `marketplace.json` and each plugin's `plugin.json`
+4. Commit the built `dist/` and version bumps to `main`
+5. Create a GitHub Release with auto-generated notes
