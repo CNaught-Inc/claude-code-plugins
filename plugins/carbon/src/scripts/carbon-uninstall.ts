@@ -1,25 +1,64 @@
 /**
  * Carbon Uninstall Script
  *
- * Removes carbon tracking artifacts:
- * 1. Deletes the local SQLite database (~/.claude/carbon-tracker.db)
- * 2. Removes the statusline wrapper (~/.claude/statusline-carbon.mjs)
- * 3. Removes the statusLine entry from ~/.claude/settings.json
+ * Removes carbon tracking data for the current project:
+ * 1. Deletes sessions matching the current project path from the database
+ * 2. If no sessions remain, deletes the database (~/.claude/carbon-tracker.db)
+ *
+ * Statusline and settings cleanup is handled by the uninstall command (uninstall.md).
+ *
+ * Usage:
+ *   carbon-uninstall.js --project-path /path/to/project
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 
-function getClaudeDir(): string {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    return path.join(homeDir, '.claude');
+import { getDatabasePath, openDatabase } from '../data-store.js';
+
+function deleteProjectSessions(projectPath: string): { deleted: number; remaining: number } {
+    const dbPath = getDatabasePath();
+    if (!fs.existsSync(dbPath)) {
+        return { deleted: 0, remaining: 0 };
+    }
+
+    const db = openDatabase();
+    try {
+        // Project paths may be stored encoded (slashes become dashes) or as-is
+        const encodedPath = projectPath.replace(/\//g, '-');
+
+        const deleteResult = db.prepare(
+            'DELETE FROM sessions WHERE project_path = ? OR project_path = ?'
+        ).run(encodedPath, projectPath);
+        const deleted = deleteResult.changes;
+
+        const countRow = db.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number };
+        return { deleted, remaining: countRow.count };
+    } finally {
+        db.close();
+    }
+}
+
+function deleteDatabase(): void {
+    const dbPath = getDatabasePath();
+
+    if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+        console.log(`  Deleted database: ${dbPath}`);
+    } else {
+        console.log('  Database not found (already removed)');
+    }
+    for (const suffix of ['-wal', '-shm']) {
+        const walPath = dbPath + suffix;
+        if (fs.existsSync(walPath)) {
+            fs.unlinkSync(walPath);
+        }
+    }
 }
 
 function main(): void {
-    const claudeDir = getClaudeDir();
-    const dbPath = path.join(claudeDir, 'carbon-tracker.db');
-    const statuslinePath = path.join(claudeDir, 'statusline-carbon.mjs');
-    const settingsPath = path.join(claudeDir, 'settings.json');
+    const args = process.argv.slice(2);
+    const pathIndex = args.indexOf('--project-path');
+    const projectPath = pathIndex !== -1 ? args[pathIndex + 1] : null;
 
     console.log('\n');
     console.log('========================================');
@@ -27,48 +66,21 @@ function main(): void {
     console.log('========================================');
     console.log('\n');
 
-    // 1. Delete database
-    if (fs.existsSync(dbPath)) {
-        fs.unlinkSync(dbPath);
-        console.log(`  Deleted database: ${dbPath}`);
+    if (!projectPath) {
+        console.log('  Error: --project-path is required');
+        process.exit(1);
+    }
+
+    console.log(`  Removing sessions for: ${projectPath}\n`);
+    const { deleted, remaining } = deleteProjectSessions(projectPath);
+    console.log(`  Deleted ${deleted} session(s) for this project`);
+
+    if (remaining === 0) {
+        console.log('  No sessions remain — deleting database...\n');
+        deleteDatabase();
     } else {
-        console.log('  Database not found (already removed)');
-    }
-
-    // Also remove WAL/SHM files if they exist
-    for (const suffix of ['-wal', '-shm']) {
-        const walPath = dbPath + suffix;
-        if (fs.existsSync(walPath)) {
-            fs.unlinkSync(walPath);
-        }
-    }
-
-    // 2. Remove statusline wrapper
-    if (fs.existsSync(statuslinePath)) {
-        fs.unlinkSync(statuslinePath);
-        console.log(`  Deleted statusline: ${statuslinePath}`);
-    }
-
-    // 3. Remove statusLine from settings.json if it points to our script
-    if (fs.existsSync(settingsPath)) {
-        try {
-            const content = fs.readFileSync(settingsPath, 'utf-8');
-            const settings = JSON.parse(content) as Record<string, unknown>;
-            const statusLine = settings.statusLine as Record<string, unknown> | undefined;
-
-            if (
-                statusLine &&
-                typeof statusLine === 'object' &&
-                typeof statusLine.command === 'string' &&
-                statusLine.command.includes('statusline-carbon')
-            ) {
-                delete settings.statusLine;
-                fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-                console.log('  Removed statusLine from settings.json');
-            }
-        } catch {
-            // Non-fatal
-        }
+        console.log(`  ${remaining} session(s) from other projects remain`);
+        console.log('  Database left intact');
     }
 
     console.log('\n');
