@@ -1,12 +1,12 @@
 # /carbon:uninstall
 
-Uninstall the CNaught carbon tracking plugin and delete all local data.
+Uninstall the CNaught carbon tracking plugin for the current project.
 
 ## Instructions
 
 ### Step 1: Confirm with the user
 
-Ask the user to confirm: "This will permanently delete your carbon tracking database and all local tracking data. Are you sure?"
+Ask the user to confirm: "This will delete carbon tracking data for this project. If no other projects have tracked sessions, the database and statusline will also be removed. Continue?"
 
 - If **no**: Stop here.
 - If **yes**: Continue.
@@ -14,10 +14,10 @@ Ask the user to confirm: "This will permanently delete your carbon tracking data
 ### Step 2: Run the uninstall script
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-uninstall.js
+node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-uninstall.js --project-path "$(pwd)"
 ```
 
-This deletes the SQLite database and statusline script.
+This removes sessions for the current project. If no sessions remain from other projects, it also deletes the database and statusline.
 
 ### Step 3: Clean up settings
 
