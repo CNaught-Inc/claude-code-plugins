@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": ["plugins/*"],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
