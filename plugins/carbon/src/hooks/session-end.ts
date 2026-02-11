@@ -6,6 +6,7 @@
 
 import { formatCO2 } from '../carbon-calculator.js';
 import {
+    encodeProjectPath,
     getAggregateStats,
     getSession,
     initializeDatabase,
@@ -18,10 +19,11 @@ import { log, logError, readStdinJson, SessionEndInputSchema } from '../utils/st
  */
 function displaySummary(
     db: ReturnType<typeof openDatabase>,
-    sessionId: string
+    sessionId: string,
+    projectPath?: string
 ): void {
     const session = getSession(db, sessionId);
-    const stats = getAggregateStats(db);
+    const stats = getAggregateStats(db, projectPath);
 
     console.log('\n');
     console.log('========================================');
@@ -36,7 +38,7 @@ function displaySummary(
         console.log(`  Model: ${session.primaryModel}`);
     }
 
-    console.log('\nAll-Time Statistics:');
+    console.log('\nProject Statistics:');
     console.log(`  Sessions: ${stats.totalSessions.toLocaleString()}`);
     console.log(`  Total CO2: ${formatCO2(stats.totalCO2Grams)}`);
 
@@ -45,6 +47,7 @@ function displaySummary(
 
 async function main(): Promise<void> {
     let sessionId = 'unknown';
+    let projectPath: string | undefined;
 
     try {
         // Read input from stdin
@@ -52,6 +55,8 @@ async function main(): Promise<void> {
         try {
             input = await readStdinJson(SessionEndInputSchema);
             sessionId = input.session_id;
+            const rawPath = input.project_path || input.cwd;
+            projectPath = rawPath ? encodeProjectPath(rawPath) : undefined;
         } catch {
             log('No input received');
         }
@@ -64,7 +69,7 @@ async function main(): Promise<void> {
             initializeDatabase(db);
 
             // Display summary
-            displaySummary(db, sessionId);
+            displaySummary(db, sessionId, projectPath);
         } finally {
             db.close();
         }

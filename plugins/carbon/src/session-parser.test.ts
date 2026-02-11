@@ -1,19 +1,41 @@
-import * as fs from 'fs';
+import { mock, beforeEach, describe, it, expect } from 'bun:test';
 import * as path from 'path';
 
-import {
+// Mock fs before importing session-parser
+const mockExistsSync = mock(() => false);
+const mockReadFileSync = mock(() => '');
+const mockReaddirSync = mock(() => [] as string[]);
+const mockStatSync = mock(() => ({
+    birthtime: new Date('2025-01-01T00:00:00Z'),
+    mtime: new Date('2025-01-01T01:00:00Z')
+}));
+
+mock.module('fs', () => ({
+    existsSync: mockExistsSync,
+    readFileSync: mockReadFileSync,
+    readdirSync: mockReaddirSync,
+    statSync: mockStatSync
+}));
+
+const {
     getClaudeProjectsDir,
     getSessionIdFromPath,
     findTranscriptPath,
     parseSession
-} from './session-parser';
-
-jest.mock('fs');
-
-const mockFs = fs as jest.Mocked<typeof fs>;
+} = await import('./session-parser');
 
 beforeEach(() => {
-    jest.resetAllMocks();
+    mockExistsSync.mockReset();
+    mockReadFileSync.mockReset();
+    mockReaddirSync.mockReset();
+    mockStatSync.mockReset();
+    mockExistsSync.mockReturnValue(false);
+    mockReadFileSync.mockReturnValue('');
+    mockReaddirSync.mockReturnValue([] as string[]);
+    mockStatSync.mockReturnValue({
+        birthtime: new Date('2025-01-01T00:00:00Z'),
+        mtime: new Date('2025-01-01T01:00:00Z')
+    });
     process.env.HOME = '/home/testuser';
 });
 
@@ -45,7 +67,7 @@ describe('getSessionIdFromPath', () => {
 
 describe('findTranscriptPath', () => {
     it('finds transcript by encoded project path', () => {
-        mockFs.existsSync.mockImplementation((p) => {
+        mockExistsSync.mockImplementation((p: unknown) => {
             return (
                 String(p) ===
                 '/home/testuser/.claude/projects/-test-project/session-1.jsonl'
@@ -59,14 +81,14 @@ describe('findTranscriptPath', () => {
     });
 
     it('searches all project directories when no project path given', () => {
-        mockFs.existsSync.mockImplementation((p) => {
+        mockExistsSync.mockImplementation((p: unknown) => {
             const s = String(p);
             if (s === '/home/testuser/.claude/projects') return true;
             if (s === '/home/testuser/.claude/projects/proj-a/session-1.jsonl') return false;
             if (s === '/home/testuser/.claude/projects/proj-b/session-1.jsonl') return true;
             return false;
         });
-        (mockFs.readdirSync as jest.Mock).mockReturnValue(['proj-a', 'proj-b']);
+        mockReaddirSync.mockReturnValue(['proj-a', 'proj-b'] as any);
 
         const result = findTranscriptPath('session-1');
         expect(result).toBe(
@@ -75,7 +97,7 @@ describe('findTranscriptPath', () => {
     });
 
     it('returns null when transcript not found', () => {
-        mockFs.existsSync.mockReturnValue(false);
+        mockExistsSync.mockReturnValue(false);
 
         const result = findTranscriptPath('nonexistent', '/test/project');
         expect(result).toBeNull();
@@ -92,18 +114,18 @@ describe('parseSession', () => {
 
     beforeEach(() => {
         // Default: no subagent directory
-        mockFs.existsSync.mockImplementation((p) => {
+        mockExistsSync.mockImplementation((p: unknown) => {
             if (String(p) === transcriptPath) return true;
             return false;
         });
-        mockFs.statSync.mockReturnValue({
+        mockStatSync.mockReturnValue({
             birthtime: new Date('2025-01-01T00:00:00Z'),
             mtime: new Date('2025-01-01T01:00:00Z')
-        } as fs.Stats);
+        } as any);
     });
 
     it('parses assistant messages with usage data', () => {
-        mockFs.readFileSync.mockReturnValue(
+        mockReadFileSync.mockReturnValue(
             makeJsonl([
                 {
                     type: 'assistant',
@@ -133,7 +155,7 @@ describe('parseSession', () => {
     });
 
     it('deduplicates entries by UUID', () => {
-        mockFs.readFileSync.mockReturnValue(
+        mockReadFileSync.mockReturnValue(
             makeJsonl([
                 {
                     type: 'assistant',
@@ -159,7 +181,7 @@ describe('parseSession', () => {
     });
 
     it('skips non-assistant messages', () => {
-        mockFs.readFileSync.mockReturnValue(
+        mockReadFileSync.mockReturnValue(
             makeJsonl([
                 {
                     type: 'human',
@@ -182,7 +204,7 @@ describe('parseSession', () => {
     });
 
     it('skips malformed JSON lines', () => {
-        mockFs.readFileSync.mockReturnValue(
+        mockReadFileSync.mockReturnValue(
             'not valid json\n' +
             JSON.stringify({
                 type: 'assistant',
@@ -199,7 +221,7 @@ describe('parseSession', () => {
     });
 
     it('calculates model breakdown and primary model', () => {
-        mockFs.readFileSync.mockReturnValue(
+        mockReadFileSync.mockReturnValue(
             makeJsonl([
                 {
                     type: 'assistant',
@@ -227,7 +249,7 @@ describe('parseSession', () => {
     });
 
     it('handles empty transcript', () => {
-        mockFs.readFileSync.mockReturnValue('');
+        mockReadFileSync.mockReturnValue('');
 
         const result = parseSession(transcriptPath);
         expect(result.records).toHaveLength(0);

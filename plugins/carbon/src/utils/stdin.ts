@@ -85,6 +85,8 @@ export type SessionEndInput = z.infer<typeof SessionEndInputSchema>;
  */
 export const StatuslineInputSchema = z.object({
     session_id: z.string().optional(),
+    project_path: z.string().optional(),
+    cwd: z.string().optional(),
     model: z
         .object({
             id: z.string().optional(),

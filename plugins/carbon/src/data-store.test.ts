@@ -7,6 +7,8 @@ import {
     getAllSessionIds,
     sessionExists,
     getAggregateStats,
+    getDailyStats,
+    encodeProjectPath,
     getInstalledAt,
     setInstalledAt
 } from './data-store';
@@ -174,6 +176,99 @@ describe('getAggregateStats', () => {
         expect(stats.totalOutputTokens).toBe(1500);
         expect(stats.totalEnergyWh).toBeCloseTo(0.3);
         expect(stats.totalCO2Grams).toBeCloseTo(0.09);
+        db.close();
+    });
+});
+
+describe('encodeProjectPath', () => {
+    it('replaces slashes with dashes', () => {
+        expect(encodeProjectPath('/Users/jason/my-project')).toBe('-Users-jason-my-project');
+    });
+
+    it('handles paths without leading slash', () => {
+        expect(encodeProjectPath('relative/path')).toBe('relative-path');
+    });
+});
+
+describe('getAggregateStats with project filtering', () => {
+    it('filters by project path', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({
+            sessionId: 's1',
+            projectPath: 'project-a',
+            totalTokens: 1000,
+            co2Grams: 0.05
+        }));
+        upsertSession(db, makeSession({
+            sessionId: 's2',
+            projectPath: 'project-b',
+            totalTokens: 2000,
+            co2Grams: 0.10
+        }));
+
+        const statsA = getAggregateStats(db, 'project-a');
+        expect(statsA.totalSessions).toBe(1);
+        expect(statsA.totalTokens).toBe(1000);
+        expect(statsA.totalCO2Grams).toBeCloseTo(0.05);
+
+        const statsB = getAggregateStats(db, 'project-b');
+        expect(statsB.totalSessions).toBe(1);
+        expect(statsB.totalTokens).toBe(2000);
+        expect(statsB.totalCO2Grams).toBeCloseTo(0.10);
+
+        // Without filter returns all
+        const statsAll = getAggregateStats(db);
+        expect(statsAll.totalSessions).toBe(2);
+        expect(statsAll.totalTokens).toBe(3000);
+
+        db.close();
+    });
+
+    it('returns zeroes for unknown project', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1', projectPath: 'project-a' }));
+
+        const stats = getAggregateStats(db, 'nonexistent');
+        expect(stats.totalSessions).toBe(0);
+        expect(stats.totalTokens).toBe(0);
+        db.close();
+    });
+});
+
+describe('getDailyStats with project filtering', () => {
+    it('filters by project path', () => {
+        const db = createTestDb();
+        const today = new Date().toISOString();
+        upsertSession(db, makeSession({
+            sessionId: 's1',
+            projectPath: 'project-a',
+            totalTokens: 1000,
+            co2Grams: 0.05,
+            createdAt: new Date(today),
+            updatedAt: new Date(today)
+        }));
+        upsertSession(db, makeSession({
+            sessionId: 's2',
+            projectPath: 'project-b',
+            totalTokens: 2000,
+            co2Grams: 0.10,
+            createdAt: new Date(today),
+            updatedAt: new Date(today)
+        }));
+
+        const statsA = getDailyStats(db, 7, 'project-a');
+        expect(statsA).toHaveLength(1);
+        expect(statsA[0].tokens).toBe(1000);
+
+        const statsB = getDailyStats(db, 7, 'project-b');
+        expect(statsB).toHaveLength(1);
+        expect(statsB[0].tokens).toBe(2000);
+
+        // Without filter returns combined
+        const statsAll = getDailyStats(db, 7);
+        expect(statsAll).toHaveLength(1);
+        expect(statsAll[0].tokens).toBe(3000);
+
         db.close();
     });
 });

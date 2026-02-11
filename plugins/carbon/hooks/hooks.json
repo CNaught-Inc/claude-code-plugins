@@ -35,9 +35,5 @@
                 ]
             }
         ]
-    },
-    "statusLine": {
-        "type": "command",
-        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/statusline/carbon-statusline.js"
     }
 }

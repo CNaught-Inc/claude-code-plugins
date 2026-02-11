@@ -6,7 +6,7 @@
  */
 
 import { formatCO2, formatEnergy } from '../carbon-calculator.js';
-import { getAggregateStats, initializeDatabase, openDatabase } from '../data-store.js';
+import { encodeProjectPath, getAggregateStats, initializeDatabase, openDatabase } from '../data-store.js';
 import { logError } from '../utils/stdin.js';
 
 /**
@@ -23,14 +23,15 @@ async function main(): Promise<void> {
     console.log('========================================');
     console.log('\n');
 
-    // Get local statistics
+    // Get project statistics
     try {
         const db = openDatabase();
         initializeDatabase(db);
-        const stats = getAggregateStats(db);
+        const encodedPath = encodeProjectPath(process.cwd());
+        const stats = getAggregateStats(db, encodedPath);
         db.close();
 
-        console.log('Local Statistics:');
+        console.log('Project Statistics:');
         console.log('----------------------------------------');
         console.log(`  Sessions tracked:    ${formatNumber(stats.totalSessions)}`);
         console.log(`  Total tokens:        ${formatNumber(stats.totalTokens)}`);

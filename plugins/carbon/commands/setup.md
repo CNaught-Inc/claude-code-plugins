@@ -26,8 +26,8 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scri
 
 This will:
 - Initialize the local SQLite database
-- Install the statusline script to `~/.claude/statusline-carbon.mjs`
-- Configure `~/.claude/settings.json` to enable the CO2 statusline
+- Configure `.claude/settings.local.json` (project-level) to enable the CO2 statusline
+- Migrate any old global statusline config from `~/.claude/settings.json`
 - (If `--backfill`) Process historical transcript files into the database
 
 ### Step 3: Verify setup
