@@ -45,7 +45,8 @@ await esbuild.build({
     format: 'cjs',
     external: ['bun:sqlite'],
     banner: { js: '#!/usr/bin/env node' },
-    sourcemap: true,
+    sourcemap: process.env.NO_SOURCEMAP !== '1',
+    minify: process.env.MINIFY === '1',
 });
 
 // Set execute permissions on all output JS files
