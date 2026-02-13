@@ -16,6 +16,8 @@ import {
     getHomeDir,
     getClaudeDir,
     getDatabasePath,
+    MIGRATIONS,
+    columnExists,
 } from './data-store';
 import type { SessionRecord } from './data-store';
 
@@ -476,6 +478,53 @@ describe('getProjectStats', () => {
         const stats = getProjectStats(db, 7);
         expect(stats).toHaveLength(0);
 
+        db.close();
+    });
+});
+
+describe('columnExists', () => {
+    it('returns true for existing columns', () => {
+        const db = createTestDb();
+        expect(columnExists(db, 'sessions', 'session_id')).toBe(true);
+        expect(columnExists(db, 'sessions', 'project_path')).toBe(true);
+        db.close();
+    });
+
+    it('returns false for non-existing columns', () => {
+        const db = createTestDb();
+        expect(columnExists(db, 'sessions', 'nonexistent')).toBe(false);
+        db.close();
+    });
+});
+
+describe('migrations', () => {
+    it('sets user_version to MIGRATIONS.length after init', () => {
+        const db = createTestDb();
+        const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+        expect(row.user_version).toBe(MIGRATIONS.length);
+        db.close();
+    });
+
+    it('is idempotent — running initializeDatabase twice keeps the same version', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+        initializeDatabase(db);
+
+        const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+        expect(row.user_version).toBe(MIGRATIONS.length);
+        db.close();
+    });
+
+    it('applies only pending migrations when version is behind', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+
+        // Simulate an older database by resetting user_version
+        db.exec('PRAGMA user_version = 0');
+        initializeDatabase(db);
+
+        const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+        expect(row.user_version).toBe(MIGRATIONS.length);
         db.close();
     });
 });
