@@ -11,9 +11,10 @@
  */
 
 import { calculateSessionCarbon } from '../carbon-calculator.js';
-import { initializeDatabase, openDatabase, upsertSession } from '../data-store.js';
+import { withDatabase } from '../data-store.js';
+import { saveSessionToDb } from '../session-db.js';
 import { findTranscriptPath, parseSession } from '../session-parser.js';
-import { log, logError, readStdinJson, StopInputSchema } from '../utils/stdin.js';
+import { log, logError, readStdinJson, runHook, StopInputSchema } from '../utils/stdin.js';
 
 async function main(): Promise<void> {
     try {
@@ -49,40 +50,18 @@ async function main(): Promise<void> {
         // Calculate carbon emissions
         const carbon = calculateSessionCarbon(sessionUsage);
 
-        // Open database and save
-        const db = openDatabase();
-        try {
-            initializeDatabase(db);
-
-            upsertSession(db, {
-                sessionId: session_id,
-                projectPath: sessionUsage.projectPath,
-                inputTokens: sessionUsage.totals.inputTokens,
-                outputTokens: sessionUsage.totals.outputTokens,
-                cacheCreationTokens: sessionUsage.totals.cacheCreationTokens,
-                cacheReadTokens: sessionUsage.totals.cacheReadTokens,
-                totalTokens: sessionUsage.totals.totalTokens,
-                energyWh: carbon.energy.energyWh,
-                co2Grams: carbon.co2Grams,
-                primaryModel: sessionUsage.primaryModel,
-                createdAt: sessionUsage.createdAt,
-                updatedAt: sessionUsage.updatedAt
-            });
+        // Save to database
+        withDatabase((db) => {
+            saveSessionToDb(db, session_id, sessionUsage, carbon);
 
             log(
                 `Saved session ${session_id}: ${sessionUsage.totals.totalTokens} tokens, ${carbon.co2Grams.toFixed(3)}g CO2`
             );
-        } finally {
-            db.close();
-        }
+        });
     } catch (error) {
         // Log error but don't fail the hook
         logError('Failed to save session', error);
     }
 }
 
-main().catch((error) => {
-    logError('Unexpected error', error);
-    // Exit cleanly even on error
-    process.exit(0);
-});
+runHook(main);

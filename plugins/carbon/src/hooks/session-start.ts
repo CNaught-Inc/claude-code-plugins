@@ -6,8 +6,8 @@
  * - Non-blocking (errors logged but don't fail the hook)
  */
 
-import { initializeDatabase, openDatabase } from '../data-store.js';
-import { log, logError, readStdinJson, SessionStartInputSchema } from '../utils/stdin.js';
+import { withDatabase } from '../data-store.js';
+import { log, logError, readStdinJson, runHook, SessionStartInputSchema } from '../utils/stdin.js';
 
 async function main(): Promise<void> {
     try {
@@ -22,21 +22,13 @@ async function main(): Promise<void> {
         }
 
         // Initialize database
-        const db = openDatabase();
-        try {
-            initializeDatabase(db);
+        withDatabase(() => {
             log('Database initialized');
-        } finally {
-            db.close();
-        }
+        });
     } catch (error) {
         // Log error but don't fail the hook
         logError('Failed to initialize', error);
     }
 }
 
-main().catch((error) => {
-    logError('Unexpected error', error);
-    // Exit cleanly even on error
-    process.exit(0);
-});
+runHook(main);

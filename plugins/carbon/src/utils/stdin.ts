@@ -111,6 +111,17 @@ export const StatuslineInputSchema = z.object({
 export type StatuslineInput = z.infer<typeof StatuslineInputSchema>;
 
 /**
+ * Run a hook's main function with standard error handling.
+ * Hooks must never crash Claude Code, so errors are logged and the process exits cleanly.
+ */
+export function runHook(main: () => Promise<void>): void {
+    main().catch((error) => {
+        logError('Unexpected error', error);
+        process.exit(0);
+    });
+}
+
+/**
  * Output JSON to stdout for Claude Code to consume
  */
 export function writeStdout(data: object): void {

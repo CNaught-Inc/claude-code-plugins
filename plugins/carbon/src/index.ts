@@ -9,6 +9,7 @@
 // Core modules
 export * from './carbon-calculator.js';
 export * from './data-store.js';
+export * from './session-db.js';
 export * from './session-parser.js';
 
 // Utilities

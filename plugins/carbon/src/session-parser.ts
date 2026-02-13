@@ -11,6 +11,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 
+import { getClaudeDir } from './data-store.js';
+
 /**
  * Schema for a single transcript entry
  */
@@ -148,8 +150,7 @@ function findSubagentFiles(sessionDir: string): string[] {
  * Get the Claude projects directory
  */
 export function getClaudeProjectsDir(): string {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    return path.join(homeDir, '.claude', 'projects');
+    return path.join(getClaudeDir(), 'projects');
 }
 
 /**

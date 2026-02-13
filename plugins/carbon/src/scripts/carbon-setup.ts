@@ -12,26 +12,18 @@ import * as path from 'path';
 import { calculateSessionCarbon } from '../carbon-calculator.js';
 import {
     getAllSessionIds,
+    getClaudeDir,
     getInstalledAt,
-    initializeDatabase,
-    openDatabase,
     setInstalledAt,
-    upsertSession
+    withDatabase
 } from '../data-store.js';
+import { saveSessionToDb } from '../session-db.js';
 import {
     findAllTranscripts,
     getSessionIdFromPath,
     parseSession
 } from '../session-parser.js';
 import { logError } from '../utils/stdin.js';
-
-/**
- * Get Claude config directory
- */
-function getClaudeDir(): string {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    return path.join(homeDir, '.claude');
-}
 
 /**
  * Get the plugin root directory (two levels up from dist/scripts/)
@@ -168,7 +160,7 @@ function migrateFromGlobalStatusline(): void {
 /**
  * Backfill historical sessions from transcript files on disk.
  */
-function backfillSessions(db: ReturnType<typeof openDatabase>): number {
+function backfillSessions(db: import('bun:sqlite').Database): number {
     const existingSessionIds = new Set(getAllSessionIds(db));
     const transcripts = findAllTranscripts();
     let count = 0;
@@ -188,22 +180,7 @@ function backfillSessions(db: ReturnType<typeof openDatabase>): number {
             }
 
             const carbon = calculateSessionCarbon(sessionUsage);
-
-            upsertSession(db, {
-                sessionId,
-                projectPath: sessionUsage.projectPath,
-                inputTokens: sessionUsage.totals.inputTokens,
-                outputTokens: sessionUsage.totals.outputTokens,
-                cacheCreationTokens: sessionUsage.totals.cacheCreationTokens,
-                cacheReadTokens: sessionUsage.totals.cacheReadTokens,
-                totalTokens: sessionUsage.totals.totalTokens,
-                energyWh: carbon.energy.energyWh,
-                co2Grams: carbon.co2Grams,
-                primaryModel: sessionUsage.primaryModel,
-                createdAt: sessionUsage.createdAt,
-                updatedAt: sessionUsage.updatedAt
-            });
-
+            saveSessionToDb(db, sessionId, sessionUsage, carbon);
             count++;
         } catch (error) {
             logError(`Failed to backfill session ${sessionId}`, error);
@@ -227,23 +204,21 @@ async function main(): Promise<void> {
     // Step 1: Initialize database
     console.log('Step 1: Initializing database...');
     try {
-        const db = openDatabase();
-        initializeDatabase(db);
+        withDatabase((db) => {
+            const isFirstInstall = getInstalledAt(db) === null;
+            setInstalledAt(db);
 
-        const isFirstInstall = getInstalledAt(db) === null;
-        setInstalledAt(db);
-        db.close();
+            console.log('  Database initialized successfully');
+            if (isFirstInstall && !shouldBackfill) {
+                console.log('  First install detected — only new sessions will be tracked');
+            }
 
-        console.log('  Database initialized successfully');
-        if (isFirstInstall && !shouldBackfill) {
-            console.log('  First install detected — only new sessions will be tracked');
-        }
-
-        if (shouldBackfill) {
-            console.log('  Backfilling historical sessions...');
-            const backfilled = backfillSessions(db);
-            console.log(`  Backfilled ${backfilled} historical session(s)`);
-        }
+            if (shouldBackfill) {
+                console.log('  Backfilling historical sessions...');
+                const backfilled = backfillSessions(db);
+                console.log(`  Backfilled ${backfilled} historical session(s)`);
+            }
+        });
         console.log('');
 
         // Step 2: Configure statusline
