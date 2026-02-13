@@ -19,8 +19,7 @@ import {
     getAggregateStats,
     getDailyStats,
     getProjectStats,
-    initializeDatabase,
-    openDatabase
+    withDatabase
 } from '../data-store.js';
 import { logError } from '../utils/stdin.js';
 
@@ -73,21 +72,14 @@ async function main(): Promise<void> {
     console.log('\n');
 
     try {
-        const db = openDatabase();
-        initializeDatabase(db);
-
-        const encodedPath = encodeProjectPath(process.cwd());
-
-        // All-time project stats
-        const allTimeStats = getAggregateStats(db, encodedPath);
-
-        // Get daily stats for current project
-        const dailyStats = getDailyStats(db, 7, encodedPath);
-
-        // Get project stats (all projects for comparison)
-        const projectStats = getProjectStats(db, 7);
-
-        db.close();
+        const { allTimeStats, dailyStats, projectStats } = withDatabase((db) => {
+            const encodedPath = encodeProjectPath(process.cwd());
+            return {
+                allTimeStats: getAggregateStats(db, encodedPath),
+                dailyStats: getDailyStats(db, 7, encodedPath),
+                projectStats: getProjectStats(db, 7),
+            };
+        });
 
         // All-time section
         console.log('All-Time Project Statistics:');

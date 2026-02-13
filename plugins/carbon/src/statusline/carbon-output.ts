@@ -6,29 +6,26 @@
  */
 
 import { calculateCarbonFromTokens, formatCO2 } from '../carbon-calculator.js';
-import { encodeProjectPath, getDatabasePath } from '../data-store.js';
+import { encodeProjectPath, queryReadonlyDb } from '../data-store.js';
 import type { StatuslineInput } from '../utils/stdin.js';
-import * as fs from 'fs';
+
+function getSessionCO2FromDb(sessionId: string): number | null {
+    return queryReadonlyDb((db) => {
+        const row = db.prepare('SELECT COALESCE(co2_grams, 0) as total FROM sessions WHERE session_id = ?').get(sessionId) as { total: number } | undefined;
+        return row?.total ?? null;
+    });
+}
 
 function getTotalCO2FromDb(projectPath?: string): number | null {
-    try {
-        const dbPath = getDatabasePath();
-        if (!fs.existsSync(dbPath)) {
-            return null;
-        }
-        const { Database } = require('bun:sqlite');
-        const db = new Database(dbPath, { readonly: true });
+    return queryReadonlyDb((db) => {
         let row: { total: number };
         if (projectPath) {
             row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_path = ?').get(projectPath) as { total: number };
         } else {
             row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions').get() as { total: number };
         }
-        db.close();
         return row.total;
-    } catch {
-        return null;
-    }
+    });
 }
 
 /**
@@ -48,26 +45,30 @@ export function getCarbonOutput(input: StatuslineInput): string {
 
     const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
 
-    if (totalTokens === 0) {
-        const totalCO2 = getTotalCO2FromDb(encodedPath);
-        if (totalCO2 !== null && totalCO2 > 0) {
-            return `\u{1F331} session: 0g \u00b7 total: ${formatCO2(totalCO2)} CO\u2082`;
-        }
+    // Calculate live CO2 from current context window
+    const liveCO2 = totalTokens > 0
+        ? calculateCarbonFromTokens(
+            inputTokens,
+            outputTokens,
+            cacheCreationTokens,
+            cacheReadTokens,
+            input.model?.id || 'unknown'
+        ).co2Grams
+        : 0;
+
+    // Session CO2: use DB value (cumulative) + live context estimate
+    const dbSessionCO2 = input.session_id ? getSessionCO2FromDb(input.session_id) : null;
+    const sessionCO2 = (dbSessionCO2 ?? 0) + liveCO2;
+
+    const totalCO2 = getTotalCO2FromDb(encodedPath);
+
+    if (sessionCO2 === 0 && (totalCO2 === null || totalCO2 === 0)) {
         return '';
     }
 
-    const carbon = calculateCarbonFromTokens(
-        inputTokens,
-        outputTokens,
-        cacheCreationTokens,
-        cacheReadTokens,
-        input.model?.id || 'unknown'
-    );
-
-    const totalCO2 = getTotalCO2FromDb(encodedPath);
     const allSuffix = totalCO2 !== null && totalCO2 > 0
-        ? ` \u00b7 total: ${formatCO2(totalCO2)}`
+        ? ` \u00b7 total: ${formatCO2(totalCO2 + liveCO2)}`
         : '';
 
-    return `\u{1F331} session: ${formatCO2(carbon.co2Grams)}${allSuffix} CO\u2082`;
+    return `\u{1F331} session: ${formatCO2(sessionCO2)}${allSuffix} CO\u2082`;
 }

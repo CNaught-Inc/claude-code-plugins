@@ -73,11 +73,24 @@ export function encodeProjectPath(rawPath: string): string {
 }
 
 /**
+ * Get the user's home directory
+ */
+export function getHomeDir(): string {
+    return process.env.HOME || process.env.USERPROFILE || '';
+}
+
+/**
+ * Get the Claude config directory (~/.claude)
+ */
+export function getClaudeDir(): string {
+    return path.join(getHomeDir(), '.claude');
+}
+
+/**
  * Get the database file path
  */
 export function getDatabasePath(): string {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    return path.join(homeDir, '.claude', 'carbon-tracker.db');
+    return path.join(getClaudeDir(), 'carbon-tracker.db');
 }
 
 /**
@@ -99,6 +112,39 @@ export function openDatabase(): Database {
     ensureDbDirectory();
     const dbPath = getDatabasePath();
     return new Database(dbPath);
+}
+
+/**
+ * Open, initialize, run callback, and close the database.
+ * Handles the common open → init → use → close pattern.
+ */
+export function withDatabase<T>(fn: (db: Database) => T): T {
+    const db = openDatabase();
+    try {
+        initializeDatabase(db);
+        return fn(db);
+    } finally {
+        db.close();
+    }
+}
+
+/**
+ * Open the database in readonly mode, run a query, and close.
+ * Returns null if the database doesn't exist or the query fails.
+ */
+export function queryReadonlyDb<T>(fn: (db: Database) => T): T | null {
+    const dbPath = getDatabasePath();
+    if (!fs.existsSync(dbPath)) {
+        return null;
+    }
+    const db = new Database(dbPath, { readonly: true });
+    try {
+        return fn(db);
+    } catch {
+        return null;
+    } finally {
+        db.close();
+    }
 }
 
 /**
