@@ -8,6 +8,7 @@
 import { Database } from 'bun:sqlite';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logError } from './utils/stdin.js';
 
 /**
  * Session record in the database
@@ -147,6 +148,57 @@ export function queryReadonlyDb<T>(fn: (db: Database) => T): T | null {
     }
 }
 
+interface Migration {
+    version: number;
+    description: string;
+    up: (db: Database) => void;
+}
+
+export const MIGRATIONS: Migration[] = [
+    // Add new migrations here. Each must be idempotent.
+    // Example:
+    // {
+    //     version: 1,
+    //     description: 'Add duration_seconds column to sessions',
+    //     up: (db) => {
+    //         if (!columnExists(db, 'sessions', 'duration_seconds')) {
+    //             db.exec('ALTER TABLE sessions ADD COLUMN duration_seconds REAL');
+    //         }
+    //     },
+    // },
+];
+
+/**
+ * Check if a column exists on a table (useful for idempotent migrations)
+ */
+export function columnExists(db: Database, table: string, column: string): boolean {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    return cols.some((c) => c.name === column);
+}
+
+/**
+ * Run pending schema migrations using PRAGMA user_version for tracking
+ */
+function runMigrations(db: Database): void {
+    const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+    const currentVersion = row.user_version;
+
+    if (currentVersion >= MIGRATIONS.length) {
+        return;
+    }
+
+    for (let i = currentVersion; i < MIGRATIONS.length; i++) {
+        const migration = MIGRATIONS[i];
+        try {
+            migration.up(db);
+            db.exec(`PRAGMA user_version = ${migration.version}`);
+        } catch (error) {
+            logError(`Migration v${migration.version} failed: ${migration.description}`, error);
+            return;
+        }
+    }
+}
+
 /**
  * Initialize the database schema
  */
@@ -179,6 +231,8 @@ export function initializeDatabase(db: Database): void {
             value TEXT NOT NULL
         );
     `);
+
+    runMigrations(db);
 }
 
 /**
