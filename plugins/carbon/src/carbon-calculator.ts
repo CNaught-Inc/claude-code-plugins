@@ -1,152 +1,156 @@
 /**
  * Carbon Calculator
  *
- * Converts token usage into CO2 estimates using the ecologits.ai methodology.
- * Reference: https://ecologits.ai/latest/methodology/llm_inference
+ * Converts token usage into energy and CO2 estimates using the Jegham et al.
+ * methodology ("How Hungry is AI?", arXiv 2505.09598v6, Nov 2025).
  *
- * The calculation considers:
- * 1. Energy consumption per token (varies by model size)
- * 2. Carbon intensity of electricity (gCO2/kWh)
- * 3. Power Usage Effectiveness (PUE) of data centers
+ * The calculation uses a physics-based formula:
+ *   Energy = inference_time × (GPU_power × utilization + nonGPU_power × utilization) × PUE
+ *   Carbon = Energy × CIF
+ *
+ * All hardware, infrastructure, and performance parameters are model-specific,
+ * sourced from Jegham's infrastructure-aware benchmarking framework.
  */
 
 import type { SessionUsage, TokenUsageRecord } from './session-parser.js';
 
 /**
- * Model configuration for energy consumption
- * Based on ecologits.ai methodology and model specifications
+ * Model configuration based on Jegham et al. infrastructure-aware methodology.
+ *
+ * Each config captures the full hardware/infrastructure context:
+ * - GPU and non-GPU subsystem power draws
+ * - Per-request utilization bounds (derived from model size class and batch size 8)
+ * - Provider-specific PUE and carbon intensity factor
+ * - Median performance benchmarks from Artificial Analysis
  */
-interface ModelConfig {
-    /** Energy per 1000 tokens in Wh (varies by model size) */
-    whPer1000Tokens: number;
-    /** Human-readable name */
+export interface ModelConfig {
     displayName: string;
-    /** Model family */
     family: 'opus' | 'sonnet' | 'haiku' | 'unknown';
+    /** GPU subsystem rated power (kW) */
+    gpuPowerKw: number;
+    /** Non-GPU subsystem rated power (kW) — CPUs, SSDs, network, cooling control */
+    nonGpuPowerKw: number;
+    /** Minimum GPU utilization fraction per request */
+    minGpuUtilization: number;
+    /** Maximum GPU utilization fraction per request */
+    maxGpuUtilization: number;
+    /** Non-GPU utilization fraction per request */
+    nonGpuUtilization: number;
+    /** Power Usage Effectiveness — datacenter overhead multiplier */
+    pue: number;
+    /** Carbon Intensity Factor (kgCO2e/kWh) — provider/datacenter specific */
+    cif: number;
+    /** Median tokens per second (from Artificial Analysis benchmarks) */
+    medianTps: number;
+    /** Median time to first token in seconds (from Artificial Analysis benchmarks) */
+    medianTtftSeconds: number;
 }
 
-/**
- * Model configurations
- *
- * Energy consumption estimates based on:
- * - Model parameter counts (Opus ~175B, Sonnet ~70B, Haiku ~20B estimated)
- * - GPU power consumption for inference
- * - Typical tokens per second throughput
- *
- * Using ecologits.ai methodology:
- * Energy (kWh) = (GPU_Power * Time) / Efficiency
- *
- * Estimated values (Wh per 1000 tokens):
- * - Opus 4.5: ~0.030 Wh/1K tokens (largest, most capable)
- * - Sonnet 4: ~0.015 Wh/1K tokens (medium)
- * - Haiku 3.5: ~0.005 Wh/1K tokens (smallest, fastest)
- */
+// All Anthropic models are hosted on DGX H200/H100 on AWS infrastructure.
+// Hardware class: Large (8 GPUs, 5.50-7.50% GPU util, 6.25% non-GPU util)
+// Source: Jegham et al. Table 1 + Artificial Analysis median benchmarks
+const ANTHROPIC_LARGE_BASE = {
+    gpuPowerKw: 5.6,
+    nonGpuPowerKw: 4.6,
+    minGpuUtilization: 0.055,
+    maxGpuUtilization: 0.075,
+    nonGpuUtilization: 0.0625,
+    pue: 1.14,
+    cif: 0.300,
+} as const;
+
 const MODEL_CONFIGS: Record<string, ModelConfig> = {
-    // Opus models
-    'claude-opus-4-5-20251101': {
-        whPer1000Tokens: 0.03,
-        displayName: 'Claude Opus 4.5',
-        family: 'opus'
+    // Haiku models
+    'claude-3-haiku-20240307': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude 3 Haiku',
+        family: 'haiku',
+        medianTps: 109,
+        medianTtftSeconds: 0.37,
     },
-    'claude-opus-4-20250514': {
-        whPer1000Tokens: 0.028,
-        displayName: 'Claude Opus 4',
-        family: 'opus'
+    'claude-3-5-haiku-20241022': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude 3.5 Haiku',
+        family: 'haiku',
+        medianTps: 70,
+        medianTtftSeconds: 0.54,
     },
-    'claude-3-opus-20240229': {
-        whPer1000Tokens: 0.025,
-        displayName: 'Claude 3 Opus',
-        family: 'opus'
+    'claude-haiku-4-5-20251001': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude 4.5 Haiku',
+        family: 'haiku',
+        medianTps: 148,
+        medianTtftSeconds: 0.52,
     },
 
     // Sonnet models
     'claude-sonnet-4-20250514': {
-        whPer1000Tokens: 0.015,
+        ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude Sonnet 4',
-        family: 'sonnet'
+        family: 'sonnet',
+        medianTps: 75,
+        medianTtftSeconds: 1.01,
     },
-    'claude-3-5-sonnet-20241022': {
-        whPer1000Tokens: 0.014,
-        displayName: 'Claude 3.5 Sonnet',
-        family: 'sonnet'
-    },
-    'claude-3-5-sonnet-20240620': {
-        whPer1000Tokens: 0.014,
-        displayName: 'Claude 3.5 Sonnet',
-        family: 'sonnet'
-    },
-    'claude-3-sonnet-20240229': {
-        whPer1000Tokens: 0.012,
-        displayName: 'Claude 3 Sonnet',
-        family: 'sonnet'
+    'claude-sonnet-4-5-20250929': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude 4.5 Sonnet',
+        family: 'sonnet',
+        medianTps: 81,
+        medianTtftSeconds: 1.27,
     },
 
-    // Haiku models
-    'claude-3-5-haiku-20241022': {
-        whPer1000Tokens: 0.006,
-        displayName: 'Claude 3.5 Haiku',
-        family: 'haiku'
+    // Opus models
+    'claude-opus-4-20250514': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude Opus 4',
+        family: 'opus',
+        medianTps: 55,
+        medianTtftSeconds: 1.19,
     },
-    'claude-3-haiku-20240307': {
-        whPer1000Tokens: 0.005,
-        displayName: 'Claude 3 Haiku',
-        family: 'haiku'
-    }
+    'claude-opus-4-1-20250805': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude Opus 4.1',
+        family: 'opus',
+        medianTps: 58,
+        medianTtftSeconds: 1.38,
+    },
 };
 
-/**
- * Default model config for unknown models
- */
+/** Family-level fallback configs for unrecognized model IDs */
+const FAMILY_DEFAULTS: Record<string, ModelConfig> = {
+    haiku: { ...MODEL_CONFIGS['claude-haiku-4-5-20251001'], displayName: 'Unknown Haiku' },
+    sonnet: { ...MODEL_CONFIGS['claude-sonnet-4-5-20250929'], displayName: 'Unknown Sonnet' },
+    opus: { ...MODEL_CONFIGS['claude-opus-4-1-20250805'], displayName: 'Unknown Opus' },
+};
+
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
-    whPer1000Tokens: 0.015, // Assume Sonnet-level consumption
+    ...FAMILY_DEFAULTS.sonnet,
     displayName: 'Unknown Model',
-    family: 'unknown'
+    family: 'unknown',
 };
 
 /**
- * Get model configuration
+ * Get model configuration by API model ID.
+ * Falls back to family-based config, then to Sonnet-level defaults.
  */
 export function getModelConfig(modelId: string): ModelConfig {
-    // Direct match
     if (MODEL_CONFIGS[modelId]) {
         return MODEL_CONFIGS[modelId];
     }
 
-    // Try to match by family
     const lowerModel = modelId.toLowerCase();
     if (lowerModel.includes('opus')) {
-        return { ...DEFAULT_MODEL_CONFIG, family: 'opus', whPer1000Tokens: 0.028 };
+        return { ...FAMILY_DEFAULTS.opus, family: 'opus' };
     }
     if (lowerModel.includes('sonnet')) {
-        return { ...DEFAULT_MODEL_CONFIG, family: 'sonnet', whPer1000Tokens: 0.015 };
+        return { ...FAMILY_DEFAULTS.sonnet, family: 'sonnet' };
     }
     if (lowerModel.includes('haiku')) {
-        return { ...DEFAULT_MODEL_CONFIG, family: 'haiku', whPer1000Tokens: 0.005 };
+        return { ...FAMILY_DEFAULTS.haiku, family: 'haiku' };
     }
 
     return DEFAULT_MODEL_CONFIG;
 }
-
-/**
- * Carbon intensity factors
- *
- * Global average: ~475 gCO2/kWh
- * US average: ~380 gCO2/kWh
- * Cloud providers (with renewables): ~200-300 gCO2/kWh
- *
- * We use a conservative estimate for cloud data centers
- * that have committed to renewable energy
- */
-const CARBON_INTENSITY_GCO2_PER_KWH = 300;
-
-/**
- * Power Usage Effectiveness (PUE)
- *
- * PUE accounts for cooling, lighting, and other data center overhead
- * Modern data centers: 1.1-1.3
- * We use 1.2 as a reasonable estimate
- */
-const PUE = 1.2;
 
 /**
  * Energy calculation result
@@ -173,40 +177,64 @@ export interface CarbonResult {
 }
 
 /**
- * Calculate energy consumption for a token count
+ * Calculate per-query energy consumption using Jegham Equations 1-2.
+ *
+ * Equation 1: E = inferenceTime × (P_GPU × U_GPU + P_nonGPU × U_nonGPU) × PUE
+ *   where inferenceTime = TTFT + outputTokens / TPS
+ *
+ * Equation 2: E_expected = 0.5 × E_max + 0.5 × E_min
+ *   (weighted average of min/max GPU utilization bounds)
  */
 export function calculateEnergy(
-    tokens: number,
+    outputTokens: number,
     modelConfig: ModelConfig = DEFAULT_MODEL_CONFIG
 ): EnergyResult {
-    const energyWh = (tokens / 1000) * modelConfig.whPer1000Tokens * PUE;
+    // Total inference time: prefill (TTFT) + generation (output / TPS)
+    const inferenceTimeHours =
+        (modelConfig.medianTtftSeconds + outputTokens / modelConfig.medianTps) / 3600;
+
+    // System power at min and max GPU utilization bounds
+    const powerMinKw =
+        modelConfig.gpuPowerKw * modelConfig.minGpuUtilization +
+        modelConfig.nonGpuPowerKw * modelConfig.nonGpuUtilization;
+    const powerMaxKw =
+        modelConfig.gpuPowerKw * modelConfig.maxGpuUtilization +
+        modelConfig.nonGpuPowerKw * modelConfig.nonGpuUtilization;
+
+    // Energy at each bound (Wh = hours × kW × 1000)
+    const energyMinWh = inferenceTimeHours * powerMinKw * modelConfig.pue * 1000;
+    const energyMaxWh = inferenceTimeHours * powerMaxKw * modelConfig.pue * 1000;
+
+    // Eq 2: expected energy as weighted average (w_max = 0.5)
+    const energyWh = 0.5 * energyMaxWh + 0.5 * energyMinWh;
+
     return {
         energyWh,
-        energyKwh: energyWh / 1000
+        energyKwh: energyWh / 1000,
     };
 }
 
 /**
- * Calculate CO2 emissions from energy consumption
+ * Calculate CO2 emissions from energy consumption (Jegham Equation 5).
+ *
+ * Carbon (kgCO2e) = E_query × CIF
+ * Returns grams: (energyWh / 1000) × CIF × 1000 = energyWh × CIF
  */
-export function calculateCO2FromEnergy(energyWh: number): number {
-    // Convert Wh to kWh and multiply by carbon intensity
-    return (energyWh / 1000) * CARBON_INTENSITY_GCO2_PER_KWH;
+export function calculateCO2FromEnergy(
+    energyWh: number,
+    modelConfig: ModelConfig = DEFAULT_MODEL_CONFIG
+): number {
+    return energyWh * modelConfig.cif;
 }
 
 /**
- * Calculate carbon emissions for a single token usage record
+ * Calculate carbon emissions for a single token usage record (one API request).
+ * Each request incurs one TTFT cost plus generation time for output tokens.
  */
 export function calculateRecordCarbon(record: TokenUsageRecord): CarbonResult {
     const modelConfig = getModelConfig(record.model);
-    const totalTokens =
-        record.inputTokens +
-        record.outputTokens +
-        record.cacheCreationTokens +
-        record.cacheReadTokens;
-
-    const energy = calculateEnergy(totalTokens, modelConfig);
-    const co2Grams = calculateCO2FromEnergy(energy.energyWh);
+    const energy = calculateEnergy(record.outputTokens, modelConfig);
+    const co2Grams = calculateCO2FromEnergy(energy.energyWh, modelConfig);
 
     return {
         energy,
@@ -215,51 +243,51 @@ export function calculateRecordCarbon(record: TokenUsageRecord): CarbonResult {
         modelBreakdown: {
             [modelConfig.family]: {
                 energyWh: energy.energyWh,
-                co2Grams
-            }
-        }
+                co2Grams,
+            },
+        },
     };
 }
 
 /**
- * Calculate carbon emissions for an entire session
+ * Calculate carbon emissions for an entire session.
+ * Iterates over individual records so each API request gets its own TTFT cost.
  */
 export function calculateSessionCarbon(session: SessionUsage): CarbonResult {
     const modelBreakdown: Record<string, { energyWh: number; co2Grams: number }> = {};
     let totalEnergyWh = 0;
     let totalCO2 = 0;
 
-    // Calculate per-model totals
-    for (const [model, tokens] of Object.entries(session.modelBreakdown)) {
-        const modelConfig = getModelConfig(model);
-        const energy = calculateEnergy(tokens, modelConfig);
-        const co2 = calculateCO2FromEnergy(energy.energyWh);
+    for (const record of session.records) {
+        const result = calculateRecordCarbon(record);
 
-        totalEnergyWh += energy.energyWh;
-        totalCO2 += co2;
+        totalEnergyWh += result.energy.energyWh;
+        totalCO2 += result.co2Grams;
 
+        const modelConfig = getModelConfig(record.model);
         const family = modelConfig.family;
         if (!modelBreakdown[family]) {
             modelBreakdown[family] = { energyWh: 0, co2Grams: 0 };
         }
-        modelBreakdown[family].energyWh += energy.energyWh;
-        modelBreakdown[family].co2Grams += co2;
+        modelBreakdown[family].energyWh += result.energy.energyWh;
+        modelBreakdown[family].co2Grams += result.co2Grams;
     }
 
     return {
         energy: {
             energyWh: totalEnergyWh,
-            energyKwh: totalEnergyWh / 1000
+            energyKwh: totalEnergyWh / 1000,
         },
         co2Grams: totalCO2,
         co2Kg: totalCO2 / 1000,
-        modelBreakdown
+        modelBreakdown,
     };
 }
 
 /**
- * Calculate carbon for token counts directly
- * Useful for statusline display when we have cumulative tokens
+ * Calculate carbon for token counts directly.
+ * Used by the statusline which has cumulative tokens, not per-request records.
+ * Approximates as a single inference (one TTFT + all output tokens / TPS).
  */
 export function calculateCarbonFromTokens(
     inputTokens: number,
@@ -269,10 +297,8 @@ export function calculateCarbonFromTokens(
     model: string = 'unknown'
 ): CarbonResult {
     const modelConfig = getModelConfig(model);
-    const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
-
-    const energy = calculateEnergy(totalTokens, modelConfig);
-    const co2Grams = calculateCO2FromEnergy(energy.energyWh);
+    const energy = calculateEnergy(outputTokens, modelConfig);
+    const co2Grams = calculateCO2FromEnergy(energy.energyWh, modelConfig);
 
     return {
         energy,
@@ -281,9 +307,9 @@ export function calculateCarbonFromTokens(
         modelBreakdown: {
             [modelConfig.family]: {
                 energyWh: energy.energyWh,
-                co2Grams
-            }
-        }
+                co2Grams,
+            },
+        },
     };
 }
 
@@ -319,7 +345,7 @@ export function calculateEquivalents(co2Grams: number): CarbonEquivalents {
         phoneCharges: co2Grams / 8,
         ledLightHours: co2Grams / 3,
         cupsOfCoffee: co2Grams / 21,
-        googleSearches: co2Grams / 0.2
+        googleSearches: co2Grams / 0.2,
     };
 }
 
