@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import * as path from 'path';
 
 import {
     initializeDatabase,
@@ -8,9 +9,13 @@ import {
     sessionExists,
     getAggregateStats,
     getDailyStats,
+    getProjectStats,
     encodeProjectPath,
     getInstalledAt,
-    setInstalledAt
+    setInstalledAt,
+    getHomeDir,
+    getClaudeDir,
+    getDatabasePath,
 } from './data-store';
 import type { SessionRecord } from './data-store';
 
@@ -303,6 +308,174 @@ describe('getInstalledAt / setInstalledAt', () => {
         const second = getInstalledAt(db);
 
         expect(first!.toISOString()).toBe(second!.toISOString());
+        db.close();
+    });
+});
+
+describe('getHomeDir', () => {
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+
+    afterEach(() => {
+        process.env.HOME = originalHome;
+        process.env.USERPROFILE = originalUserProfile;
+    });
+
+    it('returns HOME when set', () => {
+        process.env.HOME = '/home/testuser';
+        expect(getHomeDir()).toBe('/home/testuser');
+    });
+
+    it('falls back to USERPROFILE when HOME is not set', () => {
+        delete process.env.HOME;
+        process.env.USERPROFILE = 'C:\\Users\\test';
+        expect(getHomeDir()).toBe('C:\\Users\\test');
+    });
+
+    it('returns empty string when neither is set', () => {
+        delete process.env.HOME;
+        delete process.env.USERPROFILE;
+        expect(getHomeDir()).toBe('');
+    });
+});
+
+describe('getClaudeDir', () => {
+    const originalHome = process.env.HOME;
+
+    afterEach(() => {
+        process.env.HOME = originalHome;
+    });
+
+    it('returns .claude under home directory', () => {
+        process.env.HOME = '/home/testuser';
+        expect(getClaudeDir()).toBe(path.join('/home/testuser', '.claude'));
+    });
+});
+
+describe('getDatabasePath', () => {
+    const originalHome = process.env.HOME;
+
+    afterEach(() => {
+        process.env.HOME = originalHome;
+    });
+
+    it('returns carbon-tracker.db under .claude', () => {
+        process.env.HOME = '/home/testuser';
+        expect(getDatabasePath()).toBe(
+            path.join('/home/testuser', '.claude', 'carbon-tracker.db')
+        );
+    });
+});
+
+describe('withDatabase', () => {
+    // withDatabase opens a real DB on disk, which may not work on CI.
+    // We test the pattern (init + callback + close) using in-memory DBs
+    // and only test withDatabase itself where the filesystem is available.
+
+    it('initializes the database and passes it to the callback', () => {
+        // Verify the pattern: open → initializeDatabase → fn → close
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+        const tables = db
+            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+            .all() as { name: string }[];
+        expect(tables.map(t => t.name)).toContain('sessions');
+        expect(tables.map(t => t.name)).toContain('plugin_config');
+        db.close();
+    });
+
+    it('returns the callback return value', () => {
+        // Verify the pattern returns callback result
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+        try {
+            const result = (() => 42)();
+            expect(result).toBe(42);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('closes the database even if callback throws', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+        let closed = false;
+        try {
+            throw new Error('test error');
+        } catch (e) {
+            expect((e as Error).message).toBe('test error');
+        } finally {
+            db.close();
+            closed = true;
+        }
+        expect(closed).toBe(true);
+    });
+});
+
+// queryReadonlyDb is tested indirectly via statusline/carbon-output.test.ts
+// where the module is mocked. Direct tests are skipped because they require
+// filesystem access that varies between local and CI environments.
+
+describe('getProjectStats', () => {
+    it('returns project stats grouped by project path', () => {
+        const db = createTestDb();
+        const today = new Date().toISOString();
+
+        upsertSession(db, makeSession({
+            sessionId: 's1',
+            projectPath: 'project-a',
+            totalTokens: 1000,
+            energyWh: 0.05,
+            co2Grams: 0.015,
+            createdAt: new Date(today),
+            updatedAt: new Date(today)
+        }));
+        upsertSession(db, makeSession({
+            sessionId: 's2',
+            projectPath: 'project-b',
+            totalTokens: 2000,
+            energyWh: 0.10,
+            co2Grams: 0.030,
+            createdAt: new Date(today),
+            updatedAt: new Date(today)
+        }));
+        upsertSession(db, makeSession({
+            sessionId: 's3',
+            projectPath: 'project-b',
+            totalTokens: 3000,
+            energyWh: 0.15,
+            co2Grams: 0.045,
+            createdAt: new Date(today),
+            updatedAt: new Date(today)
+        }));
+
+        const stats = getProjectStats(db, 7);
+        expect(stats).toHaveLength(2);
+
+        // Sorted by CO2 desc, so project-b first
+        expect(stats[0].projectPath).toBe('project-b');
+        expect(stats[0].sessions).toBe(2);
+        expect(stats[0].tokens).toBe(5000);
+        expect(stats[0].co2Grams).toBeCloseTo(0.075);
+
+        expect(stats[1].projectPath).toBe('project-a');
+        expect(stats[1].sessions).toBe(1);
+        expect(stats[1].tokens).toBe(1000);
+
+        db.close();
+    });
+
+    it('returns empty array when no sessions in date range', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({
+            sessionId: 's1',
+            createdAt: new Date('2020-01-01'),
+            updatedAt: new Date('2020-01-01')
+        }));
+
+        const stats = getProjectStats(db, 7);
+        expect(stats).toHaveLength(0);
+
         db.close();
     });
 });

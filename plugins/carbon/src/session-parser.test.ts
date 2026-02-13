@@ -21,6 +21,7 @@ const {
     getClaudeProjectsDir,
     getSessionIdFromPath,
     findTranscriptPath,
+    findAllTranscripts,
     parseSession
 } = await import('./session-parser');
 
@@ -255,5 +256,55 @@ describe('parseSession', () => {
         expect(result.records).toHaveLength(0);
         expect(result.totals.totalTokens).toBe(0);
         expect(result.primaryModel).toBe('unknown');
+    });
+});
+
+describe('findAllTranscripts', () => {
+    it('returns empty array when projects dir does not exist', () => {
+        mockExistsSync.mockReturnValue(false);
+        const result = findAllTranscripts();
+        expect(result).toEqual([]);
+    });
+
+    it('finds jsonl files across project directories', () => {
+        mockExistsSync.mockReturnValue(true);
+        mockReaddirSync.mockImplementation((p: unknown) => {
+            const dir = String(p);
+            if (dir.endsWith('projects')) return ['project-a', 'project-b'] as any;
+            if (dir.endsWith('project-a')) return ['session-1.jsonl', 'session-2.jsonl'] as any;
+            if (dir.endsWith('project-b')) return ['session-3.jsonl', 'notes.txt'] as any;
+            return [] as any;
+        });
+        mockStatSync.mockReturnValue({ isDirectory: () => true } as any);
+
+        const result = findAllTranscripts();
+        expect(result).toHaveLength(3);
+        expect(result.some(p => p.includes('session-1.jsonl'))).toBe(true);
+        expect(result.some(p => p.includes('session-2.jsonl'))).toBe(true);
+        expect(result.some(p => p.includes('session-3.jsonl'))).toBe(true);
+        // notes.txt should not be included
+        expect(result.some(p => p.includes('notes.txt'))).toBe(false);
+    });
+
+    it('skips non-directory entries in projects dir', () => {
+        mockExistsSync.mockReturnValue(true);
+        mockReaddirSync.mockImplementation((p: unknown) => {
+            const dir = String(p);
+            if (dir.endsWith('projects')) return ['file.txt', 'project-a'] as any;
+            if (dir.endsWith('project-a')) return ['session-1.jsonl'] as any;
+            return [] as any;
+        });
+        mockStatSync.mockImplementation((p: unknown) => {
+            const s = String(p);
+            return {
+                isDirectory: () => s.endsWith('project-a'),
+                birthtime: new Date('2025-01-01'),
+                mtime: new Date('2025-01-01')
+            } as any;
+        });
+
+        const result = findAllTranscripts();
+        expect(result).toHaveLength(1);
+        expect(result[0]).toContain('session-1.jsonl');
     });
 });
