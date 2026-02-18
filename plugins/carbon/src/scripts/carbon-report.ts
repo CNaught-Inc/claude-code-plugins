@@ -9,19 +9,18 @@
  * - Project breakdown
  */
 
-import {
-    calculateEquivalents,
-    formatCO2,
-    formatEnergy
-} from '../carbon-calculator.js';
+import { calculateEquivalents, formatCO2, formatEnergy } from '../carbon-calculator';
 import {
     encodeProjectPath,
     getAggregateStats,
+    getConfig,
     getDailyStats,
+    getDatabasePath,
     getProjectStats,
+    getUnsyncedSessions,
     withDatabase
-} from '../data-store.js';
-import { logError } from '../utils/stdin.js';
+} from '../data-store';
+import { logError } from '../utils/stdin';
 
 /**
  * Format large numbers with commas
@@ -72,12 +71,19 @@ async function main(): Promise<void> {
     console.log('\n');
 
     try {
-        const { allTimeStats, dailyStats, projectStats } = withDatabase((db) => {
+        const { allTimeStats, dailyStats, projectStats, syncInfo } = withDatabase((db) => {
             const encodedPath = encodeProjectPath(process.cwd());
+            const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
             return {
                 allTimeStats: getAggregateStats(db, encodedPath),
                 dailyStats: getDailyStats(db, 7, encodedPath),
                 projectStats: getProjectStats(db, 7),
+                syncInfo: {
+                    enabled: syncEnabled,
+                    userName: syncEnabled ? getConfig(db, 'claude_code_user_name') : null,
+                    userId: syncEnabled ? getConfig(db, 'claude_code_user_id') : null,
+                    pendingCount: syncEnabled ? getUnsyncedSessions(db, 1000).length : 0
+                }
             };
         });
 
@@ -88,7 +94,9 @@ async function main(): Promise<void> {
         console.log(`  Total tokens:        ${formatNumber(allTimeStats.totalTokens)}`);
         console.log(`    Input:             ${formatNumber(allTimeStats.totalInputTokens)}`);
         console.log(`    Output:            ${formatNumber(allTimeStats.totalOutputTokens)}`);
-        console.log(`    Cache creation:    ${formatNumber(allTimeStats.totalCacheCreationTokens)}`);
+        console.log(
+            `    Cache creation:    ${formatNumber(allTimeStats.totalCacheCreationTokens)}`
+        );
         console.log(`    Cache read:        ${formatNumber(allTimeStats.totalCacheReadTokens)}`);
         console.log(`  Energy consumed:     ${formatEnergy(allTimeStats.totalEnergyWh)}`);
         console.log(`  CO2 emitted:         ${formatCO2(allTimeStats.totalCO2Grams)}`);
@@ -136,9 +144,7 @@ async function main(): Promise<void> {
                 );
             }
             if (equivalents.googleSearches >= 1) {
-                console.log(
-                    `    - ${Math.round(equivalents.googleSearches)} Google searches`
-                );
+                console.log(`    - ${Math.round(equivalents.googleSearches)} Google searches`);
             }
 
             console.log('');
@@ -199,6 +205,25 @@ async function main(): Promise<void> {
 
             console.log('');
         }
+
+        // Sync info
+        console.log('Sync:');
+        console.log('----------------------------------------');
+        if (syncInfo.enabled) {
+            console.log(`  Status:          enabled`);
+            console.log(`  Name:            ${syncInfo.userName || 'Unknown'}`);
+            console.log(`  User ID:         ${syncInfo.userId || 'Unknown'}`);
+            console.log(`  Pending sync:    ${syncInfo.pendingCount} session(s)`);
+        } else {
+            console.log('  Status:          disabled');
+        }
+        console.log('');
+
+        // Database info
+        console.log('Database:');
+        console.log('----------------------------------------');
+        console.log(`  Path:            ${getDatabasePath()}`);
+        console.log('');
 
         console.log('========================================');
         console.log('\n');

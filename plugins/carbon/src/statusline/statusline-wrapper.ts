@@ -11,9 +11,10 @@
  * Output: "<original output> | 🌱 session: 2.45g CO₂"
  */
 
-import { spawnSync } from 'child_process';
-import { readStdin, StatuslineInputSchema } from '../utils/stdin.js';
-import { getCarbonOutput } from './carbon-output.js';
+import { spawnSync } from 'node:child_process';
+
+import { readStdin, StatuslineInputSchema } from '../utils/stdin';
+import { getCarbonOutput } from './carbon-output';
 
 function getOriginalCommand(): string | undefined {
     const args = process.argv.slice(2);
@@ -27,7 +28,7 @@ function runOriginalCommand(command: string, stdinData: string): string {
             input: stdinData,
             encoding: 'utf-8',
             timeout: 5000,
-            stdio: ['pipe', 'pipe', 'pipe'],
+            stdio: ['pipe', 'pipe', 'pipe']
         });
         return (result.stdout || '').trim();
     } catch {

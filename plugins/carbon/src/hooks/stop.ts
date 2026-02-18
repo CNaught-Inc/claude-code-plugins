@@ -10,11 +10,11 @@
  * If session crashes or user force-quits, data up to last response is preserved.
  */
 
-import { calculateSessionCarbon } from '../carbon-calculator.js';
-import { withDatabase } from '../data-store.js';
-import { saveSessionToDb } from '../session-db.js';
-import { findTranscriptPath, parseSession } from '../session-parser.js';
-import { log, logError, readStdinJson, runHook, StopInputSchema } from '../utils/stdin.js';
+import { calculateSessionCarbon } from '../carbon-calculator';
+import { withDatabase } from '../data-store';
+import { saveSessionToDb } from '../session-db';
+import { findTranscriptPath, parseSession } from '../session-parser';
+import { log, logError, readStdinJson, runHook, StopInputSchema } from '../utils/stdin';
 
 async function main(): Promise<void> {
     try {

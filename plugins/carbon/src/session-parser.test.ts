@@ -1,16 +1,28 @@
-import { mock, beforeEach, describe, it, expect } from 'bun:test';
-import * as path from 'path';
+/** biome-ignore-all lint/suspicious/noExplicitAny: Use any for mocks */
 
-// Mock fs before importing session-parser
-const mockExistsSync = mock(() => false);
-const mockReadFileSync = mock(() => '');
-const mockReaddirSync = mock(() => [] as string[]);
-const mockStatSync = mock(() => ({
-    birthtime: new Date('2025-01-01T00:00:00Z'),
-    mtime: new Date('2025-01-01T01:00:00Z')
-}));
+import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
+import * as path from 'node:path';
+
+// Save real fs functions before mock.module (which bun hoists).
+const _realFs = { ...require('node:fs') };
+
+// Create mock wrappers that delegate to the real fs when not configured.
+// This prevents the mock from breaking other test files in the same bun process.
+let _useMocks = false;
+const mockExistsSync = mock((...args: any[]) => (_useMocks ? false : _realFs.existsSync(...args)));
+const mockReadFileSync = mock((...args: any[]) => (_useMocks ? '' : _realFs.readFileSync(...args)));
+const mockReaddirSync = mock((...args: any[]) => (_useMocks ? [] : _realFs.readdirSync(...args)));
+const mockStatSync = mock((...args: any[]) =>
+    _useMocks
+        ? {
+              birthtime: new Date('2025-01-01T00:00:00Z'),
+              mtime: new Date('2025-01-01T01:00:00Z')
+          }
+        : _realFs.statSync(...args)
+);
 
 mock.module('fs', () => ({
+    ..._realFs,
     existsSync: mockExistsSync,
     readFileSync: mockReadFileSync,
     readdirSync: mockReaddirSync,
@@ -26,18 +38,39 @@ const {
 } = await import('./session-parser');
 
 beforeEach(() => {
+    _useMocks = true;
+    // Reset mock call counts but keep the _useMocks-aware implementations
     mockExistsSync.mockReset();
     mockReadFileSync.mockReset();
     mockReaddirSync.mockReset();
     mockStatSync.mockReset();
-    mockExistsSync.mockReturnValue(false);
-    mockReadFileSync.mockReturnValue('');
-    mockReaddirSync.mockReturnValue([] as string[]);
-    mockStatSync.mockReturnValue({
-        birthtime: new Date('2025-01-01T00:00:00Z'),
-        mtime: new Date('2025-01-01T01:00:00Z')
-    });
+    mockExistsSync.mockImplementation((...args: any[]) =>
+        _useMocks ? false : _realFs.existsSync(...args)
+    );
+    mockReadFileSync.mockImplementation((...args: any[]) =>
+        _useMocks ? '' : _realFs.readFileSync(...args)
+    );
+    mockReaddirSync.mockImplementation((...args: any[]) =>
+        _useMocks ? ([] as string[]) : _realFs.readdirSync(...args)
+    );
+    mockStatSync.mockImplementation((...args: any[]) =>
+        _useMocks
+            ? {
+                  birthtime: new Date('2025-01-01T00:00:00Z'),
+                  mtime: new Date('2025-01-01T01:00:00Z')
+              }
+            : _realFs.statSync(...args)
+    );
     process.env.HOME = '/home/testuser';
+});
+
+afterAll(() => {
+    _useMocks = false;
+    // Restore mock implementations to delegate to real fs
+    mockExistsSync.mockImplementation((...args: any[]) => _realFs.existsSync(...args));
+    mockReadFileSync.mockImplementation((...args: any[]) => _realFs.readFileSync(...args));
+    mockReaddirSync.mockImplementation((...args: any[]) => _realFs.readdirSync(...args));
+    mockStatSync.mockImplementation((...args: any[]) => _realFs.statSync(...args));
 });
 
 describe('getClaudeProjectsDir', () => {
@@ -48,9 +81,7 @@ describe('getClaudeProjectsDir', () => {
     it('uses USERPROFILE when HOME is not set', () => {
         delete process.env.HOME;
         process.env.USERPROFILE = 'C:\\Users\\test';
-        expect(getClaudeProjectsDir()).toBe(
-            path.join('C:\\Users\\test', '.claude', 'projects')
-        );
+        expect(getClaudeProjectsDir()).toBe(path.join('C:\\Users\\test', '.claude', 'projects'));
     });
 });
 
@@ -69,16 +100,11 @@ describe('getSessionIdFromPath', () => {
 describe('findTranscriptPath', () => {
     it('finds transcript by encoded project path', () => {
         mockExistsSync.mockImplementation((p: unknown) => {
-            return (
-                String(p) ===
-                '/home/testuser/.claude/projects/-test-project/session-1.jsonl'
-            );
+            return String(p) === '/home/testuser/.claude/projects/-test-project/session-1.jsonl';
         });
 
         const result = findTranscriptPath('session-1', '/test/project');
-        expect(result).toBe(
-            '/home/testuser/.claude/projects/-test-project/session-1.jsonl'
-        );
+        expect(result).toBe('/home/testuser/.claude/projects/-test-project/session-1.jsonl');
     });
 
     it('searches all project directories when no project path given', () => {
@@ -92,9 +118,7 @@ describe('findTranscriptPath', () => {
         mockReaddirSync.mockReturnValue(['proj-a', 'proj-b'] as any);
 
         const result = findTranscriptPath('session-1');
-        expect(result).toBe(
-            '/home/testuser/.claude/projects/proj-b/session-1.jsonl'
-        );
+        expect(result).toBe('/home/testuser/.claude/projects/proj-b/session-1.jsonl');
     });
 
     it('returns null when transcript not found', () => {
@@ -207,14 +231,14 @@ describe('parseSession', () => {
     it('skips malformed JSON lines', () => {
         mockReadFileSync.mockReturnValue(
             'not valid json\n' +
-            JSON.stringify({
-                type: 'assistant',
-                uuid: 'req-1',
-                message: {
-                    model: 'claude-sonnet-4-20250514',
-                    usage: { input_tokens: 100, output_tokens: 50 }
-                }
-            })
+                JSON.stringify({
+                    type: 'assistant',
+                    uuid: 'req-1',
+                    message: {
+                        model: 'claude-sonnet-4-20250514',
+                        usage: { input_tokens: 100, output_tokens: 50 }
+                    }
+                })
         );
 
         const result = parseSession(transcriptPath);
@@ -279,11 +303,11 @@ describe('findAllTranscripts', () => {
 
         const result = findAllTranscripts();
         expect(result).toHaveLength(3);
-        expect(result.some(p => p.includes('session-1.jsonl'))).toBe(true);
-        expect(result.some(p => p.includes('session-2.jsonl'))).toBe(true);
-        expect(result.some(p => p.includes('session-3.jsonl'))).toBe(true);
+        expect(result.some((p) => p.includes('session-1.jsonl'))).toBe(true);
+        expect(result.some((p) => p.includes('session-2.jsonl'))).toBe(true);
+        expect(result.some((p) => p.includes('session-3.jsonl'))).toBe(true);
         // notes.txt should not be included
-        expect(result.some(p => p.includes('notes.txt'))).toBe(false);
+        expect(result.some((p) => p.includes('notes.txt'))).toBe(false);
     });
 
     it('skips non-directory entries in projects dir', () => {

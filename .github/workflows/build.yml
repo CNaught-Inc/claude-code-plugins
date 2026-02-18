@@ -15,6 +15,3 @@ jobs:
       - run: bun install
       - run: bun run typecheck
       - run: bun run test
-      - run: bun run build
-        env:
-          NO_SOURCEMAP: '1'

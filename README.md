@@ -26,6 +26,29 @@ Add the marketplace and install the carbon plugin in Claude Code:
 
 Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
 
+### Local (development)
+
+To install from a local clone of this repo:
+
+```bash
+bun install
+```
+
+Then in Claude Code:
+
+```
+/plugin marketplace add /path/to/claude-code-plugins
+/plugin install carbon@cnaught-plugins
+```
+
+Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
+
+To point at a staging API, create `plugins/carbon/.env.local`:
+
+```
+CNAUGHT_API_URL=https://your-staging-api-url.com
+```
+
 ### Updating
 
 To pull the latest plugin version:
@@ -50,11 +73,9 @@ bun install
 ### Commands
 
 ```bash
-bun run build       # Build all plugins
 bun run test        # Run tests
 bun run typecheck   # Type-check all plugins
 bun run lint        # Lint all plugins
-bun run clean       # Clean build artifacts
 ```
 
 ### Project Structure
@@ -63,22 +84,13 @@ bun run clean       # Clean build artifacts
 .claude-plugin/     # Plugin marketplace metadata
 plugins/
   carbon/           # Carbon tracker plugin
-    src/            # Source code
-    dist/           # Built output (committed via CI)
+    src/            # Source code (run directly by Bun)
 ```
-
-### CI
-
-On push and pull requests, GitHub Actions will typecheck, test, and build to validate changes.
 
 ### Releasing
 
-Releases are triggered manually via workflow dispatch via github UI or CLI.
+Trigger the "Release" workflow manually with a version number (e.g., `1.6.0`). This will update `plugin.json`, commit, tag, and create a GitHub release.
 
-The release workflow will:
+### Versioning
 
-1. Typecheck, test, and build on `main`
-2. Bump plugin versions in `marketplace.json` and each plugin's `plugin.json`
-3. Commit the built `dist/` and version bumps to `main`
-4. Tag the release commit (e.g., `v1.0.0`)
-5. Create a GitHub Release with auto-generated notes
+Plugin version lives in `plugins/<plugin>/.claude-plugin/plugin.json`.

@@ -1,13 +1,15 @@
+import { describe, expect, it } from 'bun:test';
+
 import {
-    getModelConfig,
-    calculateEnergy,
+    calculateCarbonFromTokens,
     calculateCO2FromEnergy,
+    calculateEnergy,
+    calculateEquivalents,
     calculateRecordCarbon,
     calculateSessionCarbon,
-    calculateCarbonFromTokens,
-    calculateEquivalents,
     formatCO2,
-    formatEnergy
+    formatEnergy,
+    getModelConfig
 } from './carbon-calculator';
 
 describe('getModelConfig', () => {
@@ -18,7 +20,7 @@ describe('getModelConfig', () => {
         expect(config.medianTps).toBe(81);
         expect(config.medianTtftSeconds).toBe(1.27);
         expect(config.pue).toBe(1.14);
-        expect(config.cif).toBe(0.300);
+        expect(config.cif).toBe(0.3);
     });
 
     it('returns config for each model family', () => {
@@ -63,7 +65,7 @@ describe('calculateEnergy', () => {
         // energyMax = 0.003783 * 0.7075 * 1.14 * 1000 ≈ 3.051 Wh
         // expected = 0.5 * (2.568 + 3.051) ≈ 2.810 Wh
         const result = calculateEnergy(1000, config);
-        expect(result.energyWh).toBeCloseTo(2.810, 1);
+        expect(result.energyWh).toBeCloseTo(2.81, 1);
         expect(result.energyKwh).toBeCloseTo(0.00281, 4);
     });
 
@@ -79,7 +81,7 @@ describe('calculateEnergy', () => {
     it('uses default model config when none provided', () => {
         // Default is Sonnet 4.5 level
         const result = calculateEnergy(1000);
-        expect(result.energyWh).toBeCloseTo(2.810, 1);
+        expect(result.energyWh).toBeCloseTo(2.81, 1);
     });
 
     it('scales with output token count', () => {

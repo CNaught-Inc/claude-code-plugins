@@ -2,13 +2,17 @@
  * Data Store
  *
  * SQLite-based local storage for session carbon data.
- * Database location: ~/.claude/carbon-tracker.db
+ * Database location: ~/.claude/carbon-tracker.db (prod)
+ *                    ~/.claude/carbon-tracker-<env>.db (non-prod)
  */
 
 import { Database } from 'bun:sqlite';
-import * as fs from 'fs';
-import * as path from 'path';
-import { logError } from './utils/stdin.js';
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+import { DEFAULT_API_URL, getApiUrl } from './api-client';
+import { logError } from './utils/stdin';
 
 /**
  * Session record in the database
@@ -88,10 +92,22 @@ export function getClaudeDir(): string {
 }
 
 /**
- * Get the database file path
+ * Derive a short environment suffix from the API URL.
+ * Returns '' for prod (the default URL), or a short hash for any other URL.
+ */
+function getDbEnvSuffix(): string {
+    const apiUrl = getApiUrl();
+    if (apiUrl === DEFAULT_API_URL) return '';
+    const hash = crypto.createHash('sha256').update(apiUrl).digest('hex').slice(0, 8);
+    return `-${hash}`;
+}
+
+/**
+ * Get the database file path.
+ * Non-prod environments get a suffixed filename to isolate data.
  */
 export function getDatabasePath(): string {
-    return path.join(getClaudeDir(), 'carbon-tracker.db');
+    return path.join(getClaudeDir(), `carbon-tracker${getDbEnvSuffix()}.db`);
 }
 
 /**
@@ -155,17 +171,15 @@ interface Migration {
 }
 
 export const MIGRATIONS: Migration[] = [
-    // Add new migrations here. Each must be idempotent.
-    // Example:
-    // {
-    //     version: 1,
-    //     description: 'Add duration_seconds column to sessions',
-    //     up: (db) => {
-    //         if (!columnExists(db, 'sessions', 'duration_seconds')) {
-    //             db.exec('ALTER TABLE sessions ADD COLUMN duration_seconds REAL');
-    //         }
-    //     },
-    // },
+    {
+        version: 1,
+        description: 'Add needs_sync flag for API sync tracking',
+        up: (db) => {
+            if (!columnExists(db, 'sessions', 'needs_sync')) {
+                db.exec('ALTER TABLE sessions ADD COLUMN needs_sync INTEGER NOT NULL DEFAULT 1');
+            }
+        }
+    }
 ];
 
 /**
@@ -203,10 +217,6 @@ function runMigrations(db: Database): void {
  * Initialize the database schema
  */
 export function initializeDatabase(db: Database): void {
-    // Migration: clean up auth_config table and synced_at index from older versions
-    db.exec('DROP TABLE IF EXISTS auth_config');
-    db.exec('DROP INDEX IF EXISTS idx_sessions_synced_at');
-
     db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
             session_id TEXT PRIMARY KEY,
@@ -239,19 +249,18 @@ export function initializeDatabase(db: Database): void {
  * Upsert a session record
  * Preserves created_at on update
  */
-export function upsertSession(
-    db: Database,
-    session: SessionRecord
-): void {
+export function upsertSession(db: Database, session: SessionRecord): void {
     const stmt = db.prepare(`
         INSERT INTO sessions (
             session_id, project_path, input_tokens, output_tokens,
             cache_creation_tokens, cache_read_tokens, total_tokens,
-            energy_wh, co2_grams, primary_model, created_at, updated_at
+            energy_wh, co2_grams, primary_model, created_at, updated_at,
+            needs_sync
         ) VALUES (
             $sessionId, $projectPath, $inputTokens, $outputTokens,
             $cacheCreationTokens, $cacheReadTokens, $totalTokens,
-            $energyWh, $co2Grams, $primaryModel, $createdAt, $updatedAt
+            $energyWh, $co2Grams, $primaryModel, $createdAt, $updatedAt,
+            1
         )
         ON CONFLICT(session_id) DO UPDATE SET
             project_path = excluded.project_path,
@@ -263,7 +272,8 @@ export function upsertSession(
             energy_wh = excluded.energy_wh,
             co2_grams = excluded.co2_grams,
             primary_model = excluded.primary_model,
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at,
+            needs_sync = 1
     `);
 
     stmt.run({
@@ -365,7 +375,10 @@ export function getDailyStats(db: Database, days: number = 7, projectPath?: stri
         ORDER BY date
     `);
 
-    const rows = (projectPath ? stmt.all(days, projectPath) : stmt.all(days)) as Record<string, unknown>[];
+    const rows = (projectPath ? stmt.all(days, projectPath) : stmt.all(days)) as Record<
+        string,
+        unknown
+    >[];
 
     return rows.map((row) => ({
         date: row.date as string,
@@ -421,6 +434,51 @@ export function setInstalledAt(db: Database): void {
         "INSERT OR IGNORE INTO plugin_config (key, value) VALUES ('installed_at', ?)"
     );
     stmt.run(new Date().toISOString());
+}
+
+/**
+ * Get a value from the plugin_config table
+ */
+export function getConfig(db: Database, key: string): string | null {
+    const stmt = db.prepare('SELECT value FROM plugin_config WHERE key = ?');
+    const row = stmt.get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+}
+
+/**
+ * Set a value in the plugin_config table (upsert)
+ */
+export function setConfig(db: Database, key: string, value: string): void {
+    db.prepare(
+        'INSERT INTO plugin_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    ).run(key, value);
+}
+
+/**
+ * Delete a value from the plugin_config table
+ */
+export function deleteConfig(db: Database, key: string): void {
+    db.prepare('DELETE FROM plugin_config WHERE key = ?').run(key);
+}
+
+/**
+ * Get sessions that need syncing to the API
+ */
+export function getUnsyncedSessions(db: Database, limit: number = 100): SessionRecord[] {
+    const stmt = db.prepare('SELECT * FROM sessions WHERE needs_sync = 1 LIMIT ?');
+    const rows = stmt.all(limit) as Record<string, unknown>[];
+    return rows.map(rowToSession);
+}
+
+/**
+ * Mark sessions as synced (clear the needs_sync flag)
+ */
+export function markSessionsSynced(db: Database, sessionIds: string[]): void {
+    if (sessionIds.length === 0) return;
+    const placeholders = sessionIds.map(() => '?').join(', ');
+    db.prepare(`UPDATE sessions SET needs_sync = 0 WHERE session_id IN (${placeholders})`).run(
+        ...sessionIds
+    );
 }
 
 /**

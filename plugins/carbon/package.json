@@ -3,16 +3,12 @@
     "version": "0.1.0",
     "private": true,
     "description": "Claude Code plugin for tracking carbon emissions from AI usage",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
     "scripts": {
-        "build": "node build.mjs",
-        "watch": "tsc --watch",
         "typecheck": "tsc --noEmit",
-        "test": "bun test",
-        "clean": "rm -rf dist"
+        "test": "bun test"
     },
     "dependencies": {
+        "unique-names-generator": "^4.7.1",
         "zod": "^3.25.76"
     },
     "devDependencies": {
@@ -20,7 +16,6 @@
         "@types/bun": "latest",
         "@types/node": "^20.17.9",
         "better-sqlite3": "^11.0.0",
-        "esbuild": "^0.24.0",
         "typescript": "5.9.3"
     }
 }

@@ -7,10 +7,9 @@
  */
 
 // Core modules
-export * from './carbon-calculator.js';
-export * from './data-store.js';
-export * from './session-db.js';
-export * from './session-parser.js';
-
+export * from './carbon-calculator';
+export * from './data-store';
+export * from './session-db';
+export * from './session-parser';
 // Utilities
-export * from './utils/stdin.js';
+export * from './utils/stdin';

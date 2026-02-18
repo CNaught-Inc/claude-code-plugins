@@ -38,5 +38,5 @@ Generate a carbon emissions report.
 ## Script
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/bun-runner.js ${CLAUDE_PLUGIN_ROOT}/dist/scripts/carbon-report.js
+bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-report.ts
 ```

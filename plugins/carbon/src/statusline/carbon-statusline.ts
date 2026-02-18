@@ -22,8 +22,8 @@
  * 🌱 session: 2.45g · total: 123.45g CO₂
  */
 
-import { readStdinJson, StatuslineInputSchema } from '../utils/stdin.js';
-import { getCarbonOutput } from './carbon-output.js';
+import { readStdinJson, StatuslineInputSchema } from '../utils/stdin';
+import { getCarbonOutput } from './carbon-output';
 
 async function main(): Promise<void> {
     try {

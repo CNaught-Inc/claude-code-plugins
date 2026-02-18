@@ -1,13 +1,12 @@
-import { mock, describe, it, expect, beforeEach, spyOn } from 'bun:test';
-import { z } from 'zod';
+import { describe, expect, it, spyOn } from 'bun:test';
 
 import {
-    SessionStartInputSchema,
-    StopInputSchema,
-    SessionEndInputSchema,
-    StatuslineInputSchema,
     log,
     logError,
+    SessionEndInputSchema,
+    SessionStartInputSchema,
+    StatuslineInputSchema,
+    StopInputSchema,
     writeStdout
 } from './stdin';
 
@@ -128,27 +127,21 @@ describe('logError', () => {
     it('writes error with details to stderr', () => {
         const spy = spyOn(console, 'error').mockImplementation(() => {});
         logError('something failed', new Error('bad thing'));
-        expect(spy).toHaveBeenCalledWith(
-            '[carbon-tracker] ERROR: something failed - bad thing'
-        );
+        expect(spy).toHaveBeenCalledWith('[carbon-tracker] ERROR: something failed - bad thing');
         spy.mockRestore();
     });
 
     it('handles non-Error objects', () => {
         const spy = spyOn(console, 'error').mockImplementation(() => {});
         logError('failed', 'string error');
-        expect(spy).toHaveBeenCalledWith(
-            '[carbon-tracker] ERROR: failed - string error'
-        );
+        expect(spy).toHaveBeenCalledWith('[carbon-tracker] ERROR: failed - string error');
         spy.mockRestore();
     });
 
     it('works without error argument', () => {
         const spy = spyOn(console, 'error').mockImplementation(() => {});
         logError('just a message');
-        expect(spy).toHaveBeenCalledWith(
-            '[carbon-tracker] ERROR: just a message'
-        );
+        expect(spy).toHaveBeenCalledWith('[carbon-tracker] ERROR: just a message');
         spy.mockRestore();
     });
 });
