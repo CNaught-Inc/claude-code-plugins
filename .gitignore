@@ -2,6 +2,5 @@ node_modules/
 .env.local
 .turbo/
 *.tsbuildinfo
+.install-version
 
-# dist/ files are unstaged automatically by the pre-commit hook
-# so they won't be committed locally, but CI can commit them freely

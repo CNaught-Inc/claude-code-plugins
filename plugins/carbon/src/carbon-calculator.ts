@@ -12,7 +12,7 @@
  * sourced from Jegham's infrastructure-aware benchmarking framework.
  */
 
-import type { SessionUsage, TokenUsageRecord } from './session-parser.js';
+import type { SessionUsage, TokenUsageRecord } from './session-parser';
 
 /**
  * Model configuration based on Jegham et al. infrastructure-aware methodology.

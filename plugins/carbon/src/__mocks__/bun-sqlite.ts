@@ -43,5 +43,5 @@ BetterSqlite3.prototype.prepare = function (this: BetterSqlite3.Database, sql: s
     return wrapStatement(_prepare.call(this, sql));
 } as typeof _prepare;
 
-const Database = BetterSqlite3;
+const Database: typeof BetterSqlite3 = BetterSqlite3;
 export { Database };

@@ -7,9 +7,10 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import type { CarbonResult } from './carbon-calculator.js';
-import { upsertSession } from './data-store.js';
-import type { SessionUsage } from './session-parser.js';
+
+import type { CarbonResult } from './carbon-calculator';
+import { upsertSession } from './data-store';
+import type { SessionUsage } from './session-parser';
 
 /**
  * Save a parsed session and its carbon result to the database.
@@ -33,6 +34,6 @@ export function saveSessionToDb(
         co2Grams: carbon.co2Grams,
         primaryModel: sessionUsage.primaryModel,
         createdAt: sessionUsage.createdAt,
-        updatedAt: sessionUsage.updatedAt,
+        updatedAt: sessionUsage.updatedAt
     });
 }

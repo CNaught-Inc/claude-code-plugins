@@ -13,7 +13,7 @@
 
 import * as fs from 'fs';
 
-import { getDatabasePath, openDatabase } from '../data-store.js';
+import { deleteConfig, getDatabasePath, initializeDatabase, openDatabase } from '../data-store';
 
 function deleteProjectSessions(projectPath: string): { deleted: number; remaining: number } {
     const dbPath = getDatabasePath();
@@ -26,12 +26,14 @@ function deleteProjectSessions(projectPath: string): { deleted: number; remainin
         // Project paths may be stored encoded (slashes become dashes) or as-is
         const encodedPath = projectPath.replace(/\//g, '-');
 
-        const deleteResult = db.prepare(
-            'DELETE FROM sessions WHERE project_path = ? OR project_path = ?'
-        ).run(encodedPath, projectPath);
+        const deleteResult = db
+            .prepare('DELETE FROM sessions WHERE project_path = ? OR project_path = ?')
+            .run(encodedPath, projectPath);
         const deleted = deleteResult.changes;
 
-        const countRow = db.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number };
+        const countRow = db.prepare('SELECT COUNT(*) as count FROM sessions').get() as {
+            count: number;
+        };
         return { deleted, remaining: countRow.count };
     } finally {
         db.close();
@@ -76,6 +78,17 @@ function main(): void {
     console.log(`  Deleted ${deleted} session(s) for this project`);
 
     if (remaining === 0) {
+        // Clean up sync config before deleting the database
+        try {
+            const cleanupDb = openDatabase();
+            initializeDatabase(cleanupDb);
+            deleteConfig(cleanupDb, 'sync_enabled');
+            deleteConfig(cleanupDb, 'claude_code_user_id');
+            deleteConfig(cleanupDb, 'claude_code_user_name');
+            cleanupDb.close();
+        } catch {
+            // Non-critical, database is about to be deleted anyway
+        }
         console.log('  No sessions remain — deleting database...\n');
         deleteDatabase();
     } else {

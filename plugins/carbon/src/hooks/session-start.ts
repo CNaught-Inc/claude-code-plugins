@@ -6,13 +6,16 @@
  * - Non-blocking (errors logged but don't fail the hook)
  */
 
-import { withDatabase } from '../data-store.js';
-import { log, logError, readStdinJson, runHook, SessionStartInputSchema } from '../utils/stdin.js';
+import type { z } from 'zod';
+
+import { withDatabase } from '../data-store';
+import { batchSyncIfEnabled } from '../sync';
+import { log, logError, readStdinJson, runHook, SessionStartInputSchema } from '../utils/stdin';
 
 async function main(): Promise<void> {
     try {
         // Read input from stdin
-        let input;
+        let input: z.infer<typeof SessionStartInputSchema>;
         try {
             input = await readStdinJson(SessionStartInputSchema);
             log(`Session started: ${input.session_id}`);
@@ -25,6 +28,9 @@ async function main(): Promise<void> {
         withDatabase(() => {
             log('Database initialized');
         });
+
+        // Batch sync any sessions that failed to sync previously
+        await batchSyncIfEnabled();
     } catch (error) {
         // Log error but don't fail the hook
         logError('Failed to initialize', error);

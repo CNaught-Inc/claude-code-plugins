@@ -1,9 +1,10 @@
 import { Database } from 'bun:sqlite';
+import { describe, expect, it } from 'bun:test';
 
-import { initializeDatabase, getSession } from './data-store';
+import type { CarbonResult } from './carbon-calculator';
+import { getSession, initializeDatabase } from './data-store';
 import { saveSessionToDb } from './session-db';
 import type { SessionUsage } from './session-parser';
-import type { CarbonResult } from './carbon-calculator';
 
 function createTestDb(): Database {
     const db = new Database(':memory:');
@@ -21,13 +22,13 @@ function makeSessionUsage(overrides: Partial<SessionUsage> = {}): SessionUsage {
             outputTokens: 500,
             cacheCreationTokens: 200,
             cacheReadTokens: 100,
-            totalTokens: 1800,
+            totalTokens: 1800
         },
         modelBreakdown: { 'claude-sonnet-4-20250514': 1800 },
         primaryModel: 'claude-sonnet-4-20250514',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-01T01:00:00Z'),
-        ...overrides,
+        ...overrides
     };
 }
 
@@ -37,7 +38,7 @@ function makeCarbonResult(overrides: Partial<CarbonResult> = {}): CarbonResult {
         co2Grams: 0.015,
         co2Kg: 0.000015,
         modelBreakdown: { sonnet: { energyWh: 0.05, co2Grams: 0.015 } },
-        ...overrides,
+        ...overrides
     };
 }
 
@@ -79,13 +80,13 @@ describe('saveSessionToDb', () => {
                 outputTokens: 1000,
                 cacheCreationTokens: 400,
                 cacheReadTokens: 200,
-                totalTokens: 3600,
+                totalTokens: 3600
             },
-            updatedAt: new Date('2025-01-01T02:00:00Z'),
+            updatedAt: new Date('2025-01-01T02:00:00Z')
         });
         const updatedCarbon = makeCarbonResult({
-            energy: { energyWh: 0.10, energyKwh: 0.0001 },
-            co2Grams: 0.030,
+            energy: { energyWh: 0.1, energyKwh: 0.0001 },
+            co2Grams: 0.03
         });
 
         saveSessionToDb(db, 'session-1', updatedUsage, updatedCarbon);
@@ -93,8 +94,8 @@ describe('saveSessionToDb', () => {
         const record = getSession(db, 'session-1');
         expect(record!.inputTokens).toBe(2000);
         expect(record!.totalTokens).toBe(3600);
-        expect(record!.energyWh).toBeCloseTo(0.10);
-        expect(record!.co2Grams).toBeCloseTo(0.030);
+        expect(record!.energyWh).toBeCloseTo(0.1);
+        expect(record!.co2Grams).toBeCloseTo(0.03);
         // createdAt preserved from original insert
         expect(record!.createdAt.toISOString()).toBe('2025-01-01T00:00:00.000Z');
 

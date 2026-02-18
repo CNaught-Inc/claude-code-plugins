@@ -4,115 +4,39 @@
  * Sets up the CNaught carbon tracking plugin:
  * 1. Initializes the local SQLite database
  * 2. Configures project-level .claude/settings.local.json to enable the statusline
+ * 3. Optionally enables anonymous usage tracking with CNaught API
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { calculateSessionCarbon } from '../carbon-calculator.js';
+import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
+
+import { calculateSessionCarbon } from '../carbon-calculator';
 import {
     getAllSessionIds,
     getClaudeDir,
+    getConfig,
     getInstalledAt,
+    initializeDatabase,
+    openDatabase,
+    setConfig,
     setInstalledAt,
     withDatabase
-} from '../data-store.js';
-import { saveSessionToDb } from '../session-db.js';
-import {
-    findAllTranscripts,
-    getSessionIdFromPath,
-    parseSession
-} from '../session-parser.js';
-import { logError } from '../utils/stdin.js';
+} from '../data-store';
+import { saveSessionToDb } from '../session-db';
+import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
+import { syncUnsyncedSessions } from '../sync';
+import { logError } from '../utils/stdin';
+import { configureSettings } from './setup-helpers';
 
 /**
- * Get the plugin root directory (two levels up from dist/scripts/)
+ * Get the plugin root directory (two levels up from src/scripts/)
  */
 function getPluginRoot(): string {
-    // __dirname is dist/scripts/, plugin root is two levels up
+    // __dirname is src/scripts/, plugin root is two levels up
     return path.resolve(__dirname, '..', '..');
-}
-
-/**
- * Check if a statusLine command belongs to this plugin.
- */
-function isCarbonStatusLine(command: string): boolean {
-    return command.includes('statusline-carbon') || command.includes('carbon-statusline');
-}
-
-/**
- * Configure project-level .claude/settings.local.json with the statusline command.
- * This ensures the statusline only appears in projects where the plugin is set up.
- *
- * If an existing non-carbon statusline is found, it is preserved and wrapped
- * so both statuslines run together (original output | carbon output).
- */
-function configureSettings(): { success: boolean; message: string } {
-    const projectDir = process.cwd();
-    const claudeProjectDir = path.join(projectDir, '.claude');
-    const settingsPath = path.join(claudeProjectDir, 'settings.local.json');
-    const pluginRoot = getPluginRoot();
-    const bunRunner = path.join(pluginRoot, 'scripts', 'bun-runner.js');
-    const standaloneScript = path.join(pluginRoot, 'dist', 'statusline', 'carbon-statusline.js');
-    const wrapperScript = path.join(pluginRoot, 'dist', 'statusline', 'statusline-wrapper.js');
-
-    try {
-        let settings: Record<string, unknown> = {};
-
-        if (fs.existsSync(settingsPath)) {
-            const content = fs.readFileSync(settingsPath, 'utf-8');
-            settings = JSON.parse(content);
-        }
-
-        // Check for existing statusline in project settings first, then global
-        let existingStatusLine = settings.statusLine as Record<string, unknown> | undefined;
-        if (!existingStatusLine || typeof existingStatusLine !== 'object') {
-            // Check global settings (Claude Code cascades: project > global)
-            const globalSettingsPath = path.join(getClaudeDir(), 'settings.json');
-            try {
-                if (fs.existsSync(globalSettingsPath)) {
-                    const globalContent = fs.readFileSync(globalSettingsPath, 'utf-8');
-                    const globalSettings = JSON.parse(globalContent);
-                    if (globalSettings.statusLine && typeof globalSettings.statusLine === 'object') {
-                        existingStatusLine = globalSettings.statusLine as Record<string, unknown>;
-                    }
-                }
-            } catch {
-                // Non-critical, ignore
-            }
-        }
-        const hasExternalStatusLine =
-            existingStatusLine &&
-            typeof existingStatusLine === 'object' &&
-            typeof existingStatusLine.command === 'string' &&
-            !isCarbonStatusLine(existingStatusLine.command);
-
-        if (hasExternalStatusLine) {
-            // Wrap the existing statusline: save the original and install the wrapper
-            settings._carbonOriginalStatusLine = { ...existingStatusLine };
-            const originalCommand = (existingStatusLine as { command: string }).command;
-            settings.statusLine = {
-                type: 'command',
-                command: `node ${bunRunner} ${wrapperScript} --original-command "${originalCommand}"`
-            };
-            console.log('  Existing statusline detected — wrapping to show both');
-        } else {
-            // No external statusline (or already ours): install standalone
-            settings.statusLine = {
-                type: 'command',
-                command: `node ${bunRunner} ${standaloneScript}`
-            };
-        }
-
-        if (!fs.existsSync(claudeProjectDir)) {
-            fs.mkdirSync(claudeProjectDir, { recursive: true });
-        }
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        return { success: true, message: `Settings configured at ${settingsPath}` };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { success: false, message: `Failed to configure settings: ${message}` };
-    }
 }
 
 /**
@@ -134,7 +58,8 @@ function migrateFromGlobalStatusline(): void {
                 statusLine &&
                 typeof statusLine === 'object' &&
                 typeof statusLine.command === 'string' &&
-                (statusLine.command.includes('statusline-carbon') || statusLine.command.includes('carbon-statusline'))
+                (statusLine.command.includes('statusline-carbon') ||
+                    statusLine.command.includes('carbon-statusline'))
             ) {
                 delete settings.statusLine;
                 fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2));
@@ -191,10 +116,77 @@ function backfillSessions(db: import('bun:sqlite').Database): number {
 }
 
 /**
+ * Configure anonymous usage tracking with the CNaught API.
+ * Generates a random user ID on first enable.
+ * Uses the provided display name, or generates a random one.
+ */
+async function configureSyncTracking(
+    shouldBackfill: boolean,
+    customUserName: string | null
+): Promise<void> {
+    const db = openDatabase();
+    try {
+        initializeDatabase(db);
+
+        // Check if sync was already configured
+        const existingUserId = getConfig(db, 'claude_code_user_id');
+        if (existingUserId) {
+            const existingName = getConfig(db, 'claude_code_user_name') || 'Unknown';
+            // Update name if a new one was provided
+            if (customUserName) {
+                setConfig(db, 'claude_code_user_name', customUserName);
+                console.log(
+                    `  Updated name to "${customUserName}" (id: ${existingUserId.slice(0, 8)}...)`
+                );
+            } else {
+                console.log(
+                    `  Already configured as "${existingName}" (id: ${existingUserId.slice(0, 8)}...)`
+                );
+            }
+            setConfig(db, 'sync_enabled', 'true');
+        } else {
+            // Generate new identity
+            const userId = crypto.randomUUID();
+            const userName =
+                customUserName ||
+                uniqueNamesGenerator({
+                    dictionaries: [adjectives, animals],
+                    separator: ' ',
+                    style: 'capital'
+                });
+
+            setConfig(db, 'sync_enabled', 'true');
+            setConfig(db, 'claude_code_user_id', userId);
+            setConfig(db, 'claude_code_user_name', userName);
+            console.log(`  Sync enabled as "${userName}" (id: ${userId.slice(0, 8)}...)`);
+        }
+
+        const isFirstEnable = !existingUserId;
+
+        if (shouldBackfill) {
+            // Sync all existing sessions to the API
+            console.log('  Syncing existing sessions to CNaught API...');
+            const synced = await syncUnsyncedSessions(db);
+            console.log(`  Synced ${synced} session(s)`);
+        } else if (isFirstEnable) {
+            // First time enabling sync without backfill: mark existing sessions
+            // as already synced so only new sessions going forward get synced.
+            db.exec('UPDATE sessions SET needs_sync = 0 WHERE needs_sync = 1');
+            console.log('  Existing sessions marked as synced (not backfilling)');
+        }
+    } finally {
+        db.close();
+    }
+}
+
+/**
  * Main setup flow
  */
 async function main(): Promise<void> {
     const shouldBackfill = process.argv.includes('--backfill');
+    const shouldEnableSync = process.argv.includes('--enable-sync');
+    const userNameIndex = process.argv.indexOf('--user-name');
+    const customUserName = userNameIndex !== -1 ? process.argv[userNameIndex + 1] || null : null;
     console.log('\n');
     console.log('========================================');
     console.log('  CNaught Carbon Tracker Setup         ');
@@ -224,8 +216,19 @@ async function main(): Promise<void> {
         // Step 2: Configure statusline
         console.log('Step 2: Configuring statusline...');
         migrateFromGlobalStatusline();
-        const settingsResult = configureSettings();
+        const settingsResult = configureSettings({
+            projectDir: process.cwd(),
+            pluginRoot: getPluginRoot(),
+            globalSettingsPath: path.join(getClaudeDir(), 'settings.json')
+        });
         console.log(`  ${settingsResult.message}\n`);
+
+        // Step 3: Anonymous usage tracking
+        if (shouldEnableSync) {
+            console.log('Step 3: Anonymous usage tracking...');
+            await configureSyncTracking(shouldBackfill, customUserName);
+            console.log('');
+        }
 
         // Summary
         console.log('========================================');
@@ -234,6 +237,9 @@ async function main(): Promise<void> {
         console.log('\n');
         console.log('The carbon tracker is now active.');
         console.log('You will see CO2 emissions in your status bar.');
+        if (shouldEnableSync) {
+            console.log('Session data will sync to CNaught in the background.');
+        }
         console.log('\n');
         console.log('Commands:');
         console.log('  /carbon:report  - View emissions report');

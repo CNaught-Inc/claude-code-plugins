@@ -1,10 +1,8 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": { "outputs": ["dist/**"], "env": ["NO_SOURCEMAP", "MINIFY"] },
-    "test": { "dependsOn": ["build"] },
+    "test": {},
     "typecheck": {},
-    "lint": {},
-    "clean": { "cache": false }
+    "lint": {}
   }
 }

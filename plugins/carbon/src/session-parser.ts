@@ -7,11 +7,12 @@
  * - Subagents: <session-id>/subagents/agent-*.jsonl
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import { z } from 'zod';
 
-import { getClaudeDir } from './data-store.js';
+import { getClaudeDir } from './data-store';
 
 /**
  * Schema for a single transcript entry
@@ -72,15 +73,9 @@ export interface SessionUsage {
 }
 
 /**
- * Parse a single JSONL file and extract token usage records
+ * Parse pre-read JSONL lines and extract token usage records
  */
-function parseJsonlFile(filePath: string): TokenUsageRecord[] {
-    if (!fs.existsSync(filePath)) {
-        return [];
-    }
-
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n').filter((line) => line.trim());
+function parseJsonlLines(lines: string[]): TokenUsageRecord[] {
     const records: TokenUsageRecord[] = [];
     const seenRequestIds = new Set<string>();
 
@@ -124,6 +119,19 @@ function parseJsonlFile(filePath: string): TokenUsageRecord[] {
     }
 
     return records;
+}
+
+/**
+ * Parse a single JSONL file and extract token usage records
+ */
+function parseJsonlFile(filePath: string): TokenUsageRecord[] {
+    if (!fs.existsSync(filePath)) {
+        return [];
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n').filter((line) => line.trim());
+    return parseJsonlLines(lines);
 }
 
 /**
@@ -190,6 +198,50 @@ export function findTranscriptPath(sessionId: string, projectPath?: string): str
 }
 
 /**
+ * Extract a timestamp from a JSONL line's "timestamp" field.
+ * Transcript entries include ISO 8601 timestamps (e.g. "2026-02-13T17:23:50.733Z").
+ */
+function extractTimestamp(line: string): Date | null {
+    try {
+        const entry = JSON.parse(line);
+        if (typeof entry.timestamp === 'string') {
+            const date = new Date(entry.timestamp);
+            if (!isNaN(date.getTime())) return date;
+        }
+        // Also check nested snapshot.timestamp (file-history-snapshot entries)
+        if (typeof entry.snapshot?.timestamp === 'string') {
+            const date = new Date(entry.snapshot.timestamp);
+            if (!isNaN(date.getTime())) return date;
+        }
+    } catch {
+        // Skip malformed lines
+    }
+    return null;
+}
+
+/**
+ * Get the timestamp from the first entry in the transcript (session start time)
+ */
+function getFirstTimestamp(lines: string[]): Date | null {
+    for (const line of lines) {
+        const ts = extractTimestamp(line);
+        if (ts) return ts;
+    }
+    return null;
+}
+
+/**
+ * Get the timestamp from the last entry in the transcript (session end time)
+ */
+function getLastTimestamp(lines: string[]): Date | null {
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const ts = extractTimestamp(lines[i]);
+        if (ts) return ts;
+    }
+    return null;
+}
+
+/**
  * Parse a session's transcript and all subagent transcripts
  */
 export function parseSession(transcriptPath: string): SessionUsage {
@@ -200,8 +252,16 @@ export function parseSession(transcriptPath: string): SessionUsage {
     const projectsDir = getClaudeProjectsDir();
     const projectPath = path.relative(projectsDir, sessionDir);
 
+    // Read main transcript lines (used for both token parsing and timestamp extraction)
+    const mainLines = fs.existsSync(transcriptPath)
+        ? fs
+              .readFileSync(transcriptPath, 'utf-8')
+              .split('\n')
+              .filter((line) => line.trim())
+        : [];
+
     // Parse main transcript
-    const mainRecords = parseJsonlFile(transcriptPath);
+    const mainRecords = parseJsonlLines(mainLines);
 
     // Parse subagent transcripts
     const subagentFiles = findSubagentFiles(path.join(sessionDir, sessionId));
@@ -248,7 +308,9 @@ export function parseSession(transcriptPath: string): SessionUsage {
     const primaryModel =
         Object.entries(modelBreakdown).sort(([, a], [, b]) => b - a)[0]?.[0] || 'unknown';
 
-    // Get timestamps
+    // Get timestamps from transcript content (more reliable than file stat)
+    const firstTimestamp = getFirstTimestamp(mainLines);
+    const lastTimestamp = getLastTimestamp(mainLines);
     const stat = fs.statSync(transcriptPath);
 
     return {
@@ -258,8 +320,8 @@ export function parseSession(transcriptPath: string): SessionUsage {
         totals,
         modelBreakdown,
         primaryModel,
-        createdAt: stat.birthtime,
-        updatedAt: stat.mtime
+        createdAt: firstTimestamp || stat.birthtime,
+        updatedAt: lastTimestamp || stat.mtime
     };
 }
 

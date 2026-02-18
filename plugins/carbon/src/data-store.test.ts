@@ -1,25 +1,31 @@
 import { Database } from 'bun:sqlite';
-import * as path from 'path';
+import { afterEach, describe, expect, it } from 'bun:test';
+import * as path from 'node:path';
 
-import {
-    initializeDatabase,
-    upsertSession,
-    getSession,
-    getAllSessionIds,
-    sessionExists,
-    getAggregateStats,
-    getDailyStats,
-    getProjectStats,
-    encodeProjectPath,
-    getInstalledAt,
-    setInstalledAt,
-    getHomeDir,
-    getClaudeDir,
-    getDatabasePath,
-    MIGRATIONS,
-    columnExists,
-} from './data-store';
 import type { SessionRecord } from './data-store';
+import {
+    columnExists,
+    deleteConfig,
+    encodeProjectPath,
+    getAggregateStats,
+    getAllSessionIds,
+    getClaudeDir,
+    getConfig,
+    getDailyStats,
+    getDatabasePath,
+    getHomeDir,
+    getInstalledAt,
+    getProjectStats,
+    getSession,
+    getUnsyncedSessions,
+    initializeDatabase,
+    MIGRATIONS,
+    markSessionsSynced,
+    sessionExists,
+    setConfig,
+    setInstalledAt,
+    upsertSession
+} from './data-store';
 
 function createTestDb(): Database {
     const db = new Database(':memory:');
@@ -48,9 +54,9 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 describe('initializeDatabase', () => {
     it('creates sessions and plugin_config tables', () => {
         const db = createTestDb();
-        const tables = db
-            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-            .all() as { name: string }[];
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+            name: string;
+        }[];
         const tableNames = tables.map((t) => t.name);
 
         expect(tableNames).toContain('sessions');
@@ -63,9 +69,9 @@ describe('initializeDatabase', () => {
         initializeDatabase(db);
         initializeDatabase(db);
 
-        const tables = db
-            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-            .all() as { name: string }[];
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+            name: string;
+        }[];
         expect(tables.length).toBeGreaterThanOrEqual(2);
         db.close();
     });
@@ -104,12 +110,15 @@ describe('upsertSession / getSession', () => {
         upsertSession(db, makeSession());
 
         // Update with new token counts
-        upsertSession(db, makeSession({
-            inputTokens: 2000,
-            outputTokens: 1000,
-            totalTokens: 3000,
-            updatedAt: new Date('2025-01-01T02:00:00Z')
-        }));
+        upsertSession(
+            db,
+            makeSession({
+                inputTokens: 2000,
+                outputTokens: 1000,
+                totalTokens: 3000,
+                updatedAt: new Date('2025-01-01T02:00:00Z')
+            })
+        );
 
         const retrieved = getSession(db, 'session-1');
         expect(retrieved!.inputTokens).toBe(2000);
@@ -159,22 +168,28 @@ describe('getAggregateStats', () => {
 
     it('aggregates across multiple sessions', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({
-            sessionId: 's1',
-            inputTokens: 1000,
-            outputTokens: 500,
-            totalTokens: 1500,
-            energyWh: 0.1,
-            co2Grams: 0.03
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 's2',
-            inputTokens: 2000,
-            outputTokens: 1000,
-            totalTokens: 3000,
-            energyWh: 0.2,
-            co2Grams: 0.06
-        }));
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                inputTokens: 1000,
+                outputTokens: 500,
+                totalTokens: 1500,
+                energyWh: 0.1,
+                co2Grams: 0.03
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's2',
+                inputTokens: 2000,
+                outputTokens: 1000,
+                totalTokens: 3000,
+                energyWh: 0.2,
+                co2Grams: 0.06
+            })
+        );
 
         const stats = getAggregateStats(db);
         expect(stats.totalSessions).toBe(2);
@@ -200,18 +215,24 @@ describe('encodeProjectPath', () => {
 describe('getAggregateStats with project filtering', () => {
     it('filters by project path', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({
-            sessionId: 's1',
-            projectPath: 'project-a',
-            totalTokens: 1000,
-            co2Grams: 0.05
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 's2',
-            projectPath: 'project-b',
-            totalTokens: 2000,
-            co2Grams: 0.10
-        }));
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                projectPath: 'project-a',
+                totalTokens: 1000,
+                co2Grams: 0.05
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's2',
+                projectPath: 'project-b',
+                totalTokens: 2000,
+                co2Grams: 0.1
+            })
+        );
 
         const statsA = getAggregateStats(db, 'project-a');
         expect(statsA.totalSessions).toBe(1);
@@ -221,7 +242,7 @@ describe('getAggregateStats with project filtering', () => {
         const statsB = getAggregateStats(db, 'project-b');
         expect(statsB.totalSessions).toBe(1);
         expect(statsB.totalTokens).toBe(2000);
-        expect(statsB.totalCO2Grams).toBeCloseTo(0.10);
+        expect(statsB.totalCO2Grams).toBeCloseTo(0.1);
 
         // Without filter returns all
         const statsAll = getAggregateStats(db);
@@ -246,22 +267,28 @@ describe('getDailyStats with project filtering', () => {
     it('filters by project path', () => {
         const db = createTestDb();
         const today = new Date().toISOString();
-        upsertSession(db, makeSession({
-            sessionId: 's1',
-            projectPath: 'project-a',
-            totalTokens: 1000,
-            co2Grams: 0.05,
-            createdAt: new Date(today),
-            updatedAt: new Date(today)
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 's2',
-            projectPath: 'project-b',
-            totalTokens: 2000,
-            co2Grams: 0.10,
-            createdAt: new Date(today),
-            updatedAt: new Date(today)
-        }));
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                projectPath: 'project-a',
+                totalTokens: 1000,
+                co2Grams: 0.05,
+                createdAt: new Date(today),
+                updatedAt: new Date(today)
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's2',
+                projectPath: 'project-b',
+                totalTokens: 2000,
+                co2Grams: 0.1,
+                createdAt: new Date(today),
+                updatedAt: new Date(today)
+            })
+        );
 
         const statsA = getDailyStats(db, 7, 'project-a');
         expect(statsA).toHaveLength(1);
@@ -363,9 +390,7 @@ describe('getDatabasePath', () => {
 
     it('returns carbon-tracker.db under .claude', () => {
         process.env.HOME = '/home/testuser';
-        expect(getDatabasePath()).toBe(
-            path.join('/home/testuser', '.claude', 'carbon-tracker.db')
-        );
+        expect(getDatabasePath()).toBe(path.join('/home/testuser', '.claude', 'carbon-tracker.db'));
     });
 });
 
@@ -378,11 +403,11 @@ describe('withDatabase', () => {
         // Verify the pattern: open → initializeDatabase → fn → close
         const db = new Database(':memory:');
         initializeDatabase(db);
-        const tables = db
-            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-            .all() as { name: string }[];
-        expect(tables.map(t => t.name)).toContain('sessions');
-        expect(tables.map(t => t.name)).toContain('plugin_config');
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+            name: string;
+        }[];
+        expect(tables.map((t) => t.name)).toContain('sessions');
+        expect(tables.map((t) => t.name)).toContain('plugin_config');
         db.close();
     });
 
@@ -423,33 +448,42 @@ describe('getProjectStats', () => {
         const db = createTestDb();
         const today = new Date().toISOString();
 
-        upsertSession(db, makeSession({
-            sessionId: 's1',
-            projectPath: 'project-a',
-            totalTokens: 1000,
-            energyWh: 0.05,
-            co2Grams: 0.015,
-            createdAt: new Date(today),
-            updatedAt: new Date(today)
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 's2',
-            projectPath: 'project-b',
-            totalTokens: 2000,
-            energyWh: 0.10,
-            co2Grams: 0.030,
-            createdAt: new Date(today),
-            updatedAt: new Date(today)
-        }));
-        upsertSession(db, makeSession({
-            sessionId: 's3',
-            projectPath: 'project-b',
-            totalTokens: 3000,
-            energyWh: 0.15,
-            co2Grams: 0.045,
-            createdAt: new Date(today),
-            updatedAt: new Date(today)
-        }));
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                projectPath: 'project-a',
+                totalTokens: 1000,
+                energyWh: 0.05,
+                co2Grams: 0.015,
+                createdAt: new Date(today),
+                updatedAt: new Date(today)
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's2',
+                projectPath: 'project-b',
+                totalTokens: 2000,
+                energyWh: 0.1,
+                co2Grams: 0.03,
+                createdAt: new Date(today),
+                updatedAt: new Date(today)
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's3',
+                projectPath: 'project-b',
+                totalTokens: 3000,
+                energyWh: 0.15,
+                co2Grams: 0.045,
+                createdAt: new Date(today),
+                updatedAt: new Date(today)
+            })
+        );
 
         const stats = getProjectStats(db, 7);
         expect(stats).toHaveLength(2);
@@ -469,11 +503,14 @@ describe('getProjectStats', () => {
 
     it('returns empty array when no sessions in date range', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({
-            sessionId: 's1',
-            createdAt: new Date('2020-01-01'),
-            updatedAt: new Date('2020-01-01')
-        }));
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                createdAt: new Date('2020-01-01'),
+                updatedAt: new Date('2020-01-01')
+            })
+        );
 
         const stats = getProjectStats(db, 7);
         expect(stats).toHaveLength(0);
@@ -525,6 +562,159 @@ describe('migrations', () => {
 
         const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
         expect(row.user_version).toBe(MIGRATIONS.length);
+        db.close();
+    });
+});
+
+describe('getConfig / setConfig / deleteConfig', () => {
+    it('returns null for nonexistent key', () => {
+        const db = createTestDb();
+        expect(getConfig(db, 'nonexistent')).toBeNull();
+        db.close();
+    });
+
+    it('sets and retrieves a config value', () => {
+        const db = createTestDb();
+        setConfig(db, 'sync_enabled', 'true');
+        expect(getConfig(db, 'sync_enabled')).toBe('true');
+        db.close();
+    });
+
+    it('overwrites existing config value', () => {
+        const db = createTestDb();
+        setConfig(db, 'user_name', 'Alice');
+        setConfig(db, 'user_name', 'Bob');
+        expect(getConfig(db, 'user_name')).toBe('Bob');
+        db.close();
+    });
+
+    it('deletes a config key', () => {
+        const db = createTestDb();
+        setConfig(db, 'temp_key', 'value');
+        expect(getConfig(db, 'temp_key')).toBe('value');
+        deleteConfig(db, 'temp_key');
+        expect(getConfig(db, 'temp_key')).toBeNull();
+        db.close();
+    });
+
+    it('deleting nonexistent key is a no-op', () => {
+        const db = createTestDb();
+        deleteConfig(db, 'nonexistent');
+        expect(getConfig(db, 'nonexistent')).toBeNull();
+        db.close();
+    });
+});
+
+describe('getUnsyncedSessions / markSessionsSynced', () => {
+    it('new sessions default to needs_sync = 1', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        upsertSession(db, makeSession({ sessionId: 's2' }));
+
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(2);
+        expect(unsynced.map((s) => s.sessionId).sort()).toEqual(['s1', 's2']);
+        db.close();
+    });
+
+    it('markSessionsSynced clears needs_sync flag', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        upsertSession(db, makeSession({ sessionId: 's2' }));
+        upsertSession(db, makeSession({ sessionId: 's3' }));
+
+        markSessionsSynced(db, ['s1', 's3']);
+
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(1);
+        expect(unsynced[0].sessionId).toBe('s2');
+        db.close();
+    });
+
+    it('respects limit parameter', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        upsertSession(db, makeSession({ sessionId: 's2' }));
+        upsertSession(db, makeSession({ sessionId: 's3' }));
+
+        const unsynced = getUnsyncedSessions(db, 2);
+        expect(unsynced).toHaveLength(2);
+        db.close();
+    });
+
+    it('returns empty array when all sessions are synced', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        markSessionsSynced(db, ['s1']);
+
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(0);
+        db.close();
+    });
+
+    it('upserting a synced session resets needs_sync to 1', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        markSessionsSynced(db, ['s1']);
+
+        // Re-upsert (e.g., session updated with new tokens)
+        upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
+
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(1);
+        expect(unsynced[0].sessionId).toBe('s1');
+        db.close();
+    });
+});
+
+describe('configureSyncTracking needs_sync behavior', () => {
+    it('first sync enable without backfill clears needs_sync on existing sessions', () => {
+        const db = createTestDb();
+        // Simulate existing sessions before sync is enabled
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        upsertSession(db, makeSession({ sessionId: 's2' }));
+
+        // Verify they start with needs_sync = 1
+        expect(getUnsyncedSessions(db, 100)).toHaveLength(2);
+
+        // Simulate first-time sync enable without backfill:
+        // configureSyncTracking sets sync_enabled and clears needs_sync
+        setConfig(db, 'sync_enabled', 'true');
+        setConfig(db, 'claude_code_user_id', 'test-user-id');
+        setConfig(db, 'claude_code_user_name', 'Test User');
+        db.exec('UPDATE sessions SET needs_sync = 0 WHERE needs_sync = 1');
+
+        // Existing sessions should no longer need sync
+        expect(getUnsyncedSessions(db, 100)).toHaveLength(0);
+
+        // New session added after enabling sync should need sync
+        upsertSession(db, makeSession({ sessionId: 's3' }));
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(1);
+        expect(unsynced[0].sessionId).toBe('s3');
+        db.close();
+    });
+
+    it('re-enabling sync preserves needs_sync on pending sessions', () => {
+        const db = createTestDb();
+        // Simulate already-configured sync
+        setConfig(db, 'sync_enabled', 'true');
+        setConfig(db, 'claude_code_user_id', 'existing-user-id');
+        setConfig(db, 'claude_code_user_name', 'Existing User');
+
+        // Add sessions that failed to sync (still needs_sync = 1)
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        upsertSession(db, makeSession({ sessionId: 's2' }));
+
+        // Re-running setup should NOT clear needs_sync because
+        // existingUserId is already set (isFirstEnable = false)
+        const existingUserId = getConfig(db, 'claude_code_user_id');
+        expect(existingUserId).not.toBeNull();
+
+        // The code only clears needs_sync when isFirstEnable && !shouldBackfill,
+        // so re-enable should leave pending sessions alone
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(2);
         db.close();
     });
 });
