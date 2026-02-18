@@ -1,7 +1,12 @@
 name: Release
-run-name: Release v${{ inputs.version }}
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+    && format('Release v{0}', inputs.version)
+    || 'Auto-release from develop merge' }}
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -19,35 +24,62 @@ jobs:
         with:
           ref: main
 
+      - name: Determine release version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            # Read version from plugin.json and strip pre-release suffix
+            RAW_VERSION=$(jq -r '.version' plugins/carbon/.claude-plugin/plugin.json)
+            STABLE_VERSION=$(echo "$RAW_VERSION" | sed 's/-.*//')
+            if [ "$RAW_VERSION" != "$STABLE_VERSION" ]; then
+              echo "version=$STABLE_VERSION" >> "$GITHUB_OUTPUT"
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+              echo "Detected pre-release version $RAW_VERSION, releasing as $STABLE_VERSION"
+            else
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              echo "No pre-release suffix found in version $RAW_VERSION, skipping release"
+            fi
+          fi
+
       - uses: oven-sh/setup-bun@v2
+        if: steps.version.outputs.should_release == 'true'
         with:
           bun-version: '1.3.6'
       - run: bun install
+        if: steps.version.outputs.should_release == 'true'
       - run: bun run typecheck
+        if: steps.version.outputs.should_release == 'true'
       - run: bun run test
+        if: steps.version.outputs.should_release == 'true'
       - run: bun run build
+        if: steps.version.outputs.should_release == 'true'
         env:
           NO_SOURCEMAP: '1'
           MINIFY: '1'
 
       - name: Update plugin versions
+        if: steps.version.outputs.should_release == 'true'
         run: |
-          VERSION="${{ inputs.version }}"
-          jq --arg v "$VERSION" '.plugins[].version = $v' .claude-plugin/marketplace.json > tmp.json && mv tmp.json .claude-plugin/marketplace.json
+          VERSION="${{ steps.version.outputs.version }}"
           for plugin_json in plugins/*/.claude-plugin/plugin.json; do
             jq --arg v "$VERSION" '.version = $v' "$plugin_json" > tmp.json && mv tmp.json "$plugin_json"
           done
 
       - name: Commit and tag release
+        if: steps.version.outputs.should_release == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add plugins/*/dist/ .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json
-          git commit --no-verify -m "chore: release ${{ inputs.version }} [skip ci]"
-          git tag "v${{ inputs.version }}"
+          git add plugins/*/dist/ plugins/*/.claude-plugin/plugin.json
+          git commit --no-verify -m "chore: release ${{ steps.version.outputs.version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.version }}"
           git push origin main --tags
 
       - name: Create GitHub Release
-        run: gh release create "v${{ inputs.version }}" --generate-notes
+        if: steps.version.outputs.should_release == 'true'
+        run: gh release create "v${{ steps.version.outputs.version }}" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

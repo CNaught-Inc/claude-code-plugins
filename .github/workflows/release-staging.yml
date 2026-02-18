@@ -1,0 +1,46 @@
+name: Release Staging
+run-name: Release staging v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Staging version (e.g., 1.6.0-staging.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.6'
+      - run: bun install
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+        env:
+          NO_SOURCEMAP: '1'
+          MINIFY: '1'
+
+      - name: Update plugin versions
+        run: |
+          VERSION="${{ inputs.version }}"
+          for plugin_json in plugins/*/.claude-plugin/plugin.json; do
+            jq --arg v "$VERSION" '.version = $v' "$plugin_json" > tmp.json && mv tmp.json "$plugin_json"
+          done
+
+      - name: Commit staging release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add plugins/*/dist/ plugins/*/.claude-plugin/plugin.json
+          git commit --no-verify -m "chore: staging release ${{ inputs.version }} [skip ci]"
+          git push origin develop
