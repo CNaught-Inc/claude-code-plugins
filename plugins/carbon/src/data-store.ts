@@ -20,6 +20,7 @@ import { logError } from './utils/stdin';
 export interface SessionRecord {
     sessionId: string;
     projectPath: string;
+    projectIdentifier: string;
     inputTokens: number;
     outputTokens: number;
     cacheCreationTokens: number;
@@ -66,15 +67,6 @@ export interface ProjectStats {
     tokens: number;
     energyWh: number;
     co2Grams: number;
-}
-
-/**
- * Encode a raw project path to the format stored in the database.
- * Claude Code stores transcripts under ~/.claude/projects/<encoded-path>/
- * where slashes are replaced with dashes.
- */
-export function encodeProjectPath(rawPath: string): string {
-    return rawPath.replace(/\//g, '-');
 }
 
 /**
@@ -157,7 +149,8 @@ export function queryReadonlyDb<T>(fn: (db: Database) => T): T | null {
     const db = new Database(dbPath, { readonly: true });
     try {
         return fn(db);
-    } catch {
+    } catch (error) {
+        logError('queryReadonlyDb failed', error);
         return null;
     } finally {
         db.close();
@@ -177,6 +170,20 @@ export const MIGRATIONS: Migration[] = [
         up: (db) => {
             if (!columnExists(db, 'sessions', 'needs_sync')) {
                 db.exec('ALTER TABLE sessions ADD COLUMN needs_sync INTEGER NOT NULL DEFAULT 1');
+            }
+        }
+    },
+    {
+        version: 2,
+        description: 'Add project_identifier column for stable project identification',
+        up: (db) => {
+            if (!columnExists(db, 'sessions', 'project_identifier')) {
+                db.exec(
+                    "ALTER TABLE sessions ADD COLUMN project_identifier TEXT NOT NULL DEFAULT ''"
+                );
+                db.exec(
+                    'CREATE INDEX IF NOT EXISTS idx_sessions_project_identifier ON sessions(project_identifier)'
+                );
             }
         }
     }
@@ -252,18 +259,19 @@ export function initializeDatabase(db: Database): void {
 export function upsertSession(db: Database, session: SessionRecord): void {
     const stmt = db.prepare(`
         INSERT INTO sessions (
-            session_id, project_path, input_tokens, output_tokens,
+            session_id, project_path, project_identifier, input_tokens, output_tokens,
             cache_creation_tokens, cache_read_tokens, total_tokens,
             energy_wh, co2_grams, primary_model, created_at, updated_at,
             needs_sync
         ) VALUES (
-            $sessionId, $projectPath, $inputTokens, $outputTokens,
+            $sessionId, $projectPath, $projectIdentifier, $inputTokens, $outputTokens,
             $cacheCreationTokens, $cacheReadTokens, $totalTokens,
             $energyWh, $co2Grams, $primaryModel, $createdAt, $updatedAt,
             1
         )
         ON CONFLICT(session_id) DO UPDATE SET
             project_path = excluded.project_path,
+            project_identifier = excluded.project_identifier,
             input_tokens = excluded.input_tokens,
             output_tokens = excluded.output_tokens,
             cache_creation_tokens = excluded.cache_creation_tokens,
@@ -279,6 +287,7 @@ export function upsertSession(db: Database, session: SessionRecord): void {
     stmt.run({
         $sessionId: session.sessionId,
         $projectPath: session.projectPath,
+        $projectIdentifier: session.projectIdentifier,
         $inputTokens: session.inputTokens,
         $outputTokens: session.outputTokens,
         $cacheCreationTokens: session.cacheCreationTokens,
@@ -326,8 +335,8 @@ export function sessionExists(db: Database, sessionId: string): boolean {
 /**
  * Get aggregate statistics
  */
-export function getAggregateStats(db: Database, projectPath?: string): AggregateStats {
-    const whereClause = projectPath ? 'WHERE project_path = ?' : '';
+export function getAggregateStats(db: Database, projectIdentifier?: string): AggregateStats {
+    const whereClause = projectIdentifier ? 'WHERE project_identifier = ?' : '';
     const stmt = db.prepare(`
         SELECT
             COUNT(*) as total_sessions,
@@ -342,7 +351,7 @@ export function getAggregateStats(db: Database, projectPath?: string): Aggregate
         ${whereClause}
     `);
 
-    const row = (projectPath ? stmt.get(projectPath) : stmt.get()) as Record<string, unknown>;
+    const row = (projectIdentifier ? stmt.get(projectIdentifier) : stmt.get()) as Record<string, unknown>;
 
     return {
         totalSessions: Number(row.total_sessions),
@@ -359,8 +368,8 @@ export function getAggregateStats(db: Database, projectPath?: string): Aggregate
 /**
  * Get daily statistics for the last N days
  */
-export function getDailyStats(db: Database, days: number = 7, projectPath?: string): DailyStats[] {
-    const projectFilter = projectPath ? 'AND project_path = ?' : '';
+export function getDailyStats(db: Database, days: number = 7, projectIdentifier?: string): DailyStats[] {
+    const projectFilter = projectIdentifier ? 'AND project_identifier = ?' : '';
     const stmt = db.prepare(`
         SELECT
             DATE(created_at) as date,
@@ -375,7 +384,7 @@ export function getDailyStats(db: Database, days: number = 7, projectPath?: stri
         ORDER BY date
     `);
 
-    const rows = (projectPath ? stmt.all(days, projectPath) : stmt.all(days)) as Record<
+    const rows = (projectIdentifier ? stmt.all(days, projectIdentifier) : stmt.all(days)) as Record<
         string,
         unknown
     >[];
@@ -395,21 +404,21 @@ export function getDailyStats(db: Database, days: number = 7, projectPath?: stri
 export function getProjectStats(db: Database, days: number = 7): ProjectStats[] {
     const stmt = db.prepare(`
         SELECT
-            project_path,
+            project_identifier,
             COUNT(*) as sessions,
             SUM(total_tokens) as tokens,
             SUM(energy_wh) as energy_wh,
             SUM(co2_grams) as co2_grams
         FROM sessions
         WHERE created_at >= DATE('now', '-' || ? || ' days')
-        GROUP BY project_path
+        GROUP BY project_identifier
         ORDER BY co2_grams DESC
     `);
 
     const rows = stmt.all(days) as Record<string, unknown>[];
 
     return rows.map((row) => ({
-        projectPath: row.project_path as string,
+        projectPath: row.project_identifier as string,
         sessions: Number(row.sessions),
         tokens: Number(row.tokens),
         energyWh: Number(row.energy_wh),
@@ -488,6 +497,7 @@ function rowToSession(row: Record<string, unknown>): SessionRecord {
     return {
         sessionId: row.session_id as string,
         projectPath: row.project_path as string,
+        projectIdentifier: (row.project_identifier as string) || '',
         inputTokens: Number(row.input_tokens),
         outputTokens: Number(row.output_tokens),
         cacheCreationTokens: Number(row.cache_creation_tokens),

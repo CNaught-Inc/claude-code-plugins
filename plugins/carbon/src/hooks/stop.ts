@@ -40,7 +40,7 @@ async function main(): Promise<void> {
         }
 
         // Parse the session
-        const sessionUsage = parseSession(actualTranscriptPath);
+        const sessionUsage = parseSession(actualTranscriptPath, project_path);
 
         if (sessionUsage.totals.totalTokens === 0) {
             log(`No token usage found for session ${session_id}`);

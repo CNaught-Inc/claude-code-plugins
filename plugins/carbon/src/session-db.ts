@@ -25,6 +25,7 @@ export function saveSessionToDb(
     upsertSession(db, {
         sessionId,
         projectPath: sessionUsage.projectPath,
+        projectIdentifier: sessionUsage.projectIdentifier,
         inputTokens: sessionUsage.totals.inputTokens,
         outputTokens: sessionUsage.totals.outputTokens,
         cacheCreationTokens: sessionUsage.totals.cacheCreationTokens,

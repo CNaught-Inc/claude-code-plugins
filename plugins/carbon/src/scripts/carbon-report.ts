@@ -12,7 +12,6 @@
 import { getDashboardUrl } from '../api-client';
 import { calculateEquivalents, formatCO2, formatEnergy } from '../carbon-calculator';
 import {
-    encodeProjectPath,
     getAggregateStats,
     getConfig,
     getDailyStats,
@@ -21,6 +20,7 @@ import {
     getUnsyncedSessions,
     withDatabase
 } from '../data-store';
+import { resolveProjectIdentifier } from '../project-identifier';
 import { logError } from '../utils/stdin';
 
 /**
@@ -47,22 +47,6 @@ function formatDayName(dateStr: string): string {
     return date.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
-/**
- * Get a clean project name from path
- */
-function getProjectName(projectPath: string): string {
-    // Remove common prefixes and extract last meaningful part
-    const parts = projectPath.split(/[-/]/);
-    // Try to find a meaningful name
-    for (let i = parts.length - 1; i >= 0; i--) {
-        const part = parts[i];
-        if (part && part.length > 1 && !part.includes('Users') && !part.includes('home')) {
-            return part;
-        }
-    }
-    return projectPath.slice(0, 30);
-}
-
 async function main(): Promise<void> {
     console.log('\n');
     console.log('\n');
@@ -72,12 +56,13 @@ async function main(): Promise<void> {
     console.log('\n');
 
     try {
+        const projectId = resolveProjectIdentifier(process.cwd());
+
         const { allTimeStats, dailyStats, projectStats, syncInfo } = withDatabase((db) => {
-            const encodedPath = encodeProjectPath(process.cwd());
             const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
             return {
-                allTimeStats: getAggregateStats(db, encodedPath),
-                dailyStats: getDailyStats(db, 7, encodedPath),
+                allTimeStats: getAggregateStats(db, projectId),
+                dailyStats: getDailyStats(db, 7, projectId),
                 projectStats: getProjectStats(db, 7),
                 syncInfo: {
                     enabled: syncEnabled,
@@ -87,6 +72,10 @@ async function main(): Promise<void> {
                 }
             };
         });
+
+        // Project info
+        console.log(`Project: ${projectId}`);
+        console.log('');
 
         // All-time section
         console.log('All-Time Project Statistics:');
@@ -184,7 +173,7 @@ async function main(): Promise<void> {
             const topProjects = projectStats.slice(0, 5);
 
             for (const project of topProjects) {
-                const name = getProjectName(project.projectPath).padEnd(25);
+                const name = project.projectPath.padEnd(25);
                 const co2Str = formatCO2(project.co2Grams).padStart(8);
                 const percent =
                     totalProjectCO2 > 0

@@ -26,6 +26,7 @@ import {
     setInstalledAt,
     withDatabase
 } from '../data-store';
+import { resolveProjectIdentifier } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
 import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
@@ -188,6 +189,8 @@ async function main(): Promise<void> {
     const shouldEnableSync = process.argv.includes('--enable-sync');
     const userNameIndex = process.argv.indexOf('--user-name');
     const customUserName = userNameIndex !== -1 ? process.argv[userNameIndex + 1] || null : null;
+    const projectNameIndex = process.argv.indexOf('--project-name');
+    const customProjectName = projectNameIndex !== -1 ? process.argv[projectNameIndex + 1] || null : null;
     console.log('\n');
     console.log('========================================');
     console.log('  CNaught Carbon Tracker Setup         ');
@@ -200,6 +203,12 @@ async function main(): Promise<void> {
         withDatabase((db) => {
             const isFirstInstall = getInstalledAt(db) === null;
             setInstalledAt(db);
+
+            // Store project name if provided
+            if (customProjectName) {
+                setConfig(db, 'project_name', customProjectName);
+                console.log(`  Project name set to "${customProjectName}"`);
+            }
 
             console.log('  Database initialized successfully');
             if (isFirstInstall && !shouldBackfill) {
@@ -236,6 +245,9 @@ async function main(): Promise<void> {
         console.log('  Setup Complete!                      ');
         console.log('========================================');
         console.log('\n');
+        const projectId = resolveProjectIdentifier(process.cwd());
+        console.log(`Project: ${projectId}`);
+        console.log('');
         console.log('The carbon tracker is now active.');
         console.log('You will see CO2 emissions in your status bar.');
         if (shouldEnableSync) {

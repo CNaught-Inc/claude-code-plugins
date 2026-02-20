@@ -16,6 +16,7 @@ function makeSessionUsage(overrides: Partial<SessionUsage> = {}): SessionUsage {
     return {
         sessionId: 'session-1',
         projectPath: '/test/project',
+        projectIdentifier: 'test_project_abcd1234',
         records: [],
         totals: {
             inputTokens: 1000,

@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 import { getClaudeDir } from './data-store';
+import { resolveProjectIdentifier } from './project-identifier';
 
 /**
  * Schema for a single transcript entry
@@ -58,6 +59,7 @@ export interface TokenUsageRecord {
 export interface SessionUsage {
     sessionId: string;
     projectPath: string;
+    projectIdentifier: string;
     records: TokenUsageRecord[];
     totals: {
         inputTokens: number;
@@ -242,15 +244,80 @@ function getLastTimestamp(lines: string[]): Date | null {
 }
 
 /**
+ * Try to decode an encoded project path (dashes → slashes) back to the raw filesystem path.
+ * The encoding replaces all `/` with `-`, so on Unix a path like `/Users/foo/bar` becomes
+ * `-Users-foo-bar`. This is ambiguous when directory names contain hyphens
+ * (e.g., `/Users/foo/my-project` → `-Users-foo-my-project`).
+ *
+ * We try all possible decodings by recursively choosing whether each `-` is a
+ * path separator or a literal hyphen, pruning branches where the partial path
+ * doesn't exist on disk.
+ */
+function tryDecodeProjectPath(encodedPath: string): string {
+    if (!encodedPath.startsWith('-')) {
+        return encodedPath;
+    }
+
+    // Simple case: direct replacement works
+    const simple = encodedPath.replace(/-/g, '/');
+    if (fs.existsSync(simple)) {
+        return simple;
+    }
+
+    // Ambiguous case: try all valid decodings via DFS.
+    // Split on `-`, first segment is empty (from leading `-`).
+    const segments = encodedPath.split('-').slice(1);
+
+    // DFS over segments, tracking the confirmed directory prefix and the
+    // in-progress component being built. We only check fs.existsSync when
+    // we "close" a component (treat the next `-` as `/`), so partial
+    // components like `claude` in `claude-code-plugins` aren't prematurely pruned.
+    let result: string | null = null;
+
+    function dfs(idx: number, currentDir: string, component: string): void {
+        if (result) return;
+        if (idx === segments.length) {
+            const fullPath = currentDir + '/' + component;
+            if (fs.existsSync(fullPath)) {
+                result = fullPath;
+            }
+            return;
+        }
+
+        // Option 1: treat `-` as path separator — component is a complete directory
+        const closedDir = currentDir + '/' + component;
+        if (fs.existsSync(closedDir)) {
+            dfs(idx + 1, closedDir, segments[idx]);
+        }
+
+        // Option 2: treat `-` as literal hyphen — extend the current component
+        dfs(idx + 1, currentDir, component + '-' + segments[idx]);
+    }
+
+    if (segments.length > 0) {
+        // Start: first segment always begins a component under root `/`
+        dfs(1, '', segments[0]);
+    }
+
+    return result ?? encodedPath;
+}
+
+/**
  * Parse a session's transcript and all subagent transcripts
  */
-export function parseSession(transcriptPath: string): SessionUsage {
+export function parseSession(transcriptPath: string, rawProjectPath?: string): SessionUsage {
     const sessionDir = path.dirname(transcriptPath);
     const sessionId = path.basename(transcriptPath, '.jsonl');
 
     // Determine project path from directory structure
     const projectsDir = getClaudeProjectsDir();
     const projectPath = path.relative(projectsDir, sessionDir);
+
+    // Resolve a stable project identifier.
+    // If rawProjectPath is provided (from hook inputs), use it directly.
+    // Otherwise, try to reconstruct from the encoded directory name.
+    const pathForIdentifier = rawProjectPath || tryDecodeProjectPath(projectPath);
+    const projectIdentifier = resolveProjectIdentifier(pathForIdentifier);
 
     // Read main transcript lines (used for both token parsing and timestamp extraction)
     const mainLines = fs.existsSync(transcriptPath)
@@ -316,6 +383,7 @@ export function parseSession(transcriptPath: string): SessionUsage {
     return {
         sessionId,
         projectPath,
+        projectIdentifier,
         records: allRecords,
         totals,
         modelBreakdown,

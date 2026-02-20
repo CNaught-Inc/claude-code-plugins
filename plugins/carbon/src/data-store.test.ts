@@ -6,7 +6,6 @@ import type { SessionRecord } from './data-store';
 import {
     columnExists,
     deleteConfig,
-    encodeProjectPath,
     getAggregateStats,
     getAllSessionIds,
     getClaudeDir,
@@ -37,6 +36,7 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
         sessionId: 'session-1',
         projectPath: '/test/project',
+        projectIdentifier: 'test_project_abcd1234',
         inputTokens: 1000,
         outputTokens: 500,
         cacheCreationTokens: 200,
@@ -202,24 +202,14 @@ describe('getAggregateStats', () => {
     });
 });
 
-describe('encodeProjectPath', () => {
-    it('replaces slashes with dashes', () => {
-        expect(encodeProjectPath('/Users/jason/my-project')).toBe('-Users-jason-my-project');
-    });
-
-    it('handles paths without leading slash', () => {
-        expect(encodeProjectPath('relative/path')).toBe('relative-path');
-    });
-});
-
 describe('getAggregateStats with project filtering', () => {
-    it('filters by project path', () => {
+    it('filters by project identifier', () => {
         const db = createTestDb();
         upsertSession(
             db,
             makeSession({
                 sessionId: 's1',
-                projectPath: 'project-a',
+                projectIdentifier: 'org_project-a_aaaa1111',
                 totalTokens: 1000,
                 co2Grams: 0.05
             })
@@ -228,18 +218,18 @@ describe('getAggregateStats with project filtering', () => {
             db,
             makeSession({
                 sessionId: 's2',
-                projectPath: 'project-b',
+                projectIdentifier: 'org_project-b_bbbb2222',
                 totalTokens: 2000,
                 co2Grams: 0.1
             })
         );
 
-        const statsA = getAggregateStats(db, 'project-a');
+        const statsA = getAggregateStats(db, 'org_project-a_aaaa1111');
         expect(statsA.totalSessions).toBe(1);
         expect(statsA.totalTokens).toBe(1000);
         expect(statsA.totalCO2Grams).toBeCloseTo(0.05);
 
-        const statsB = getAggregateStats(db, 'project-b');
+        const statsB = getAggregateStats(db, 'org_project-b_bbbb2222');
         expect(statsB.totalSessions).toBe(1);
         expect(statsB.totalTokens).toBe(2000);
         expect(statsB.totalCO2Grams).toBeCloseTo(0.1);
@@ -254,7 +244,7 @@ describe('getAggregateStats with project filtering', () => {
 
     it('returns zeroes for unknown project', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1', projectPath: 'project-a' }));
+        upsertSession(db, makeSession({ sessionId: 's1', projectIdentifier: 'org_project-a_aaaa1111' }));
 
         const stats = getAggregateStats(db, 'nonexistent');
         expect(stats.totalSessions).toBe(0);
@@ -264,14 +254,14 @@ describe('getAggregateStats with project filtering', () => {
 });
 
 describe('getDailyStats with project filtering', () => {
-    it('filters by project path', () => {
+    it('filters by project identifier', () => {
         const db = createTestDb();
         const today = new Date().toISOString();
         upsertSession(
             db,
             makeSession({
                 sessionId: 's1',
-                projectPath: 'project-a',
+                projectIdentifier: 'org_project-a_aaaa1111',
                 totalTokens: 1000,
                 co2Grams: 0.05,
                 createdAt: new Date(today),
@@ -282,7 +272,7 @@ describe('getDailyStats with project filtering', () => {
             db,
             makeSession({
                 sessionId: 's2',
-                projectPath: 'project-b',
+                projectIdentifier: 'org_project-b_bbbb2222',
                 totalTokens: 2000,
                 co2Grams: 0.1,
                 createdAt: new Date(today),
@@ -290,11 +280,11 @@ describe('getDailyStats with project filtering', () => {
             })
         );
 
-        const statsA = getDailyStats(db, 7, 'project-a');
+        const statsA = getDailyStats(db, 7, 'org_project-a_aaaa1111');
         expect(statsA).toHaveLength(1);
         expect(statsA[0].tokens).toBe(1000);
 
-        const statsB = getDailyStats(db, 7, 'project-b');
+        const statsB = getDailyStats(db, 7, 'org_project-b_bbbb2222');
         expect(statsB).toHaveLength(1);
         expect(statsB[0].tokens).toBe(2000);
 
@@ -444,7 +434,7 @@ describe('withDatabase', () => {
 // filesystem access that varies between local and CI environments.
 
 describe('getProjectStats', () => {
-    it('returns project stats grouped by project path', () => {
+    it('returns project stats grouped by project identifier', () => {
         const db = createTestDb();
         const today = new Date().toISOString();
 
@@ -452,7 +442,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's1',
-                projectPath: 'project-a',
+                projectIdentifier: 'org_project-a_aaaa1111',
                 totalTokens: 1000,
                 energyWh: 0.05,
                 co2Grams: 0.015,
@@ -464,7 +454,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's2',
-                projectPath: 'project-b',
+                projectIdentifier: 'org_project-b_bbbb2222',
                 totalTokens: 2000,
                 energyWh: 0.1,
                 co2Grams: 0.03,
@@ -476,7 +466,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's3',
-                projectPath: 'project-b',
+                projectIdentifier: 'org_project-b_bbbb2222',
                 totalTokens: 3000,
                 energyWh: 0.15,
                 co2Grams: 0.045,
@@ -489,12 +479,12 @@ describe('getProjectStats', () => {
         expect(stats).toHaveLength(2);
 
         // Sorted by CO2 desc, so project-b first
-        expect(stats[0].projectPath).toBe('project-b');
+        expect(stats[0].projectPath).toBe('org_project-b_bbbb2222');
         expect(stats[0].sessions).toBe(2);
         expect(stats[0].tokens).toBe(5000);
         expect(stats[0].co2Grams).toBeCloseTo(0.075);
 
-        expect(stats[1].projectPath).toBe('project-a');
+        expect(stats[1].projectPath).toBe('org_project-a_aaaa1111');
         expect(stats[1].sessions).toBe(1);
         expect(stats[1].tokens).toBe(1000);
 

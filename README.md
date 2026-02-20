@@ -4,71 +4,11 @@ A monorepo of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plug
 
 ## Plugins
 
-### Carbon Tracker (`plugins/carbon`)
+### [Carbon Tracker](plugins/carbon/)
 
-Track and offset carbon emissions from your Claude Code usage
+Track carbon emissions from your Claude Code usage. See real-time CO2 estimates in your status bar, generate reports with relatable equivalents, and optionally sync anonymized metrics to CNaught.
 
-**Features:**
-
-- Estimates carbon emissions per Claude Code session based on token usage
-- Stores session data locally via SQLite
-- Provides status line integration showing session carbon impact
-- Includes commands for setup and reporting
-- Optionally configure to sync anonymous data to CNaught to enable emissions dashboard
-
-## Installation
-
-Add the marketplace and install the carbon plugin in Claude Code:
-
-```
-/plugin marketplace add CNaught-Inc/claude-code-plugins
-/plugin install carbon@cnaught-plugins
-```
-
-Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
-
-### Local (development)
-
-To install from a local clone of this repo:
-
-```bash
-bun install
-```
-
-Then in Claude Code:
-
-```
-/plugin marketplace add /path/to/claude-code-plugins
-/plugin install carbon@cnaught-plugins
-```
-
-Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
-
-### Staging API (installed plugins)
-
-By default, the plugin points at the production API.
-
-If you've installed a local copy of the plugin, to point at the stage API, copy `.env.local.sample` to `.env.local` before running.
-
-If you have the plugin installed from GitHub and want to point at the staging API, create `.claude/settings.local.json` in your project root:
-
-```json
-{
-  "carbonTracker": {
-    "apiUrl": "https://api-stage.cnaught.com"
-  }
-}
-```
-
-Data is automatically stored in a separate database per API endpoint, so staging and production data never mix.
-
-### Updating
-
-To pull the latest plugin version:
-
-```
-/plugin marketplace update cnaught-plugins
-```
+See the [Carbon Tracker README](plugins/carbon/README.md) for installation, setup, commands, statusline, and more.
 
 ## Development
 
