@@ -6,7 +6,8 @@
  */
 
 import { calculateCarbonFromTokens, formatCO2 } from '../carbon-calculator';
-import { encodeProjectPath, queryReadonlyDb } from '../data-store';
+import { queryReadonlyDb } from '../data-store';
+import { resolveProjectIdentifier } from '../project-identifier';
 import type { StatuslineInput } from '../utils/stdin';
 
 function getSessionCO2FromDb(sessionId: string): number | null {
@@ -47,15 +48,15 @@ function getSessionSynced(sessionId: string): boolean | null {
     });
 }
 
-function getTotalCO2FromDb(projectPath?: string): number | null {
+function getTotalCO2FromDb(projectIdentifier?: string): number | null {
     return queryReadonlyDb((db) => {
         let row: { total: number };
-        if (projectPath) {
+        if (projectIdentifier) {
             row = db
                 .prepare(
-                    'SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_path = ?'
+                    'SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_identifier = ?'
                 )
-                .get(projectPath) as { total: number };
+                .get(projectIdentifier) as { total: number };
         } else {
             row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions').get() as {
                 total: number;
@@ -73,39 +74,45 @@ export function getCarbonOutput(input: StatuslineInput): string {
     const usage = input.context_window?.current_usage || {};
 
     const rawProjectPath = input.project_path || input.cwd;
-    const encodedPath = rawProjectPath ? encodeProjectPath(rawProjectPath) : undefined;
+    const projectIdentifier = rawProjectPath ? resolveProjectIdentifier(rawProjectPath) : undefined;
 
-    const inputTokens = usage.input_tokens || 0;
-    const outputTokens = usage.output_tokens || 0;
-    const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
-    const cacheReadTokens = usage.cache_read_input_tokens || 0;
-
-    const totalTokens = inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens;
-
-    // Calculate live CO2 from current context window
-    const liveCO2 =
-        totalTokens > 0
-            ? calculateCarbonFromTokens(
-                  inputTokens,
-                  outputTokens,
-                  cacheCreationTokens,
-                  cacheReadTokens,
-                  input.model?.id || 'unknown'
-              ).co2Grams
-            : 0;
-
-    // Session CO2: use DB value (cumulative) + live context estimate
+    // Session CO2: prefer the authoritative DB value (cumulative, per-request TTFT).
+    // Fall back to a live estimate from context window tokens before the first stop hook.
     const dbSessionCO2 = input.session_id ? getSessionCO2FromDb(input.session_id) : null;
-    const sessionCO2 = (dbSessionCO2 ?? 0) + liveCO2;
+    let sessionCO2: number;
 
-    const totalCO2 = getTotalCO2FromDb(encodedPath);
+    if (dbSessionCO2 !== null && dbSessionCO2 > 0) {
+        sessionCO2 = dbSessionCO2;
+    } else {
+        // No DB record yet — estimate from current context window tokens
+        const outputTokens = usage.output_tokens || 0;
+        sessionCO2 =
+            outputTokens > 0
+                ? calculateCarbonFromTokens(
+                      usage.input_tokens || 0,
+                      outputTokens,
+                      usage.cache_creation_input_tokens || 0,
+                      usage.cache_read_input_tokens || 0,
+                      input.model?.id || 'unknown'
+                  ).co2Grams
+                : 0;
+    }
+
+    const totalCO2 = getTotalCO2FromDb(projectIdentifier);
 
     if (sessionCO2 === 0 && (totalCO2 === null || totalCO2 === 0)) {
         return '';
     }
 
     const totalSuffix =
-        totalCO2 !== null && totalCO2 > 0 ? ` / ${formatCO2(totalCO2 + liveCO2)}` : '';
+        totalCO2 !== null && totalCO2 > 0 ? ` / ${formatCO2(totalCO2)}` : '';
+
+    let projectSuffix = '';
+    if (projectIdentifier && !projectIdentifier.startsWith('local_')) {
+        const purple = '\x1b[38;5;96m';
+        const reset = '\x1b[0m';
+        projectSuffix = ` \u00b7 ${purple}${projectIdentifier}${reset}`;
+    }
 
     let syncSuffix = '';
     const syncInfo = getSyncInfo();
@@ -126,5 +133,5 @@ export function getCarbonOutput(input: StatuslineInput): string {
         syncSuffix = ` \u00b7 ${nameStr}${syncStatus}`;
     }
 
-    return `\u{1F331} Session: ${formatCO2(sessionCO2)}${totalSuffix} CO\u2082${syncSuffix}`;
+    return `\u{1F331} Session: ${formatCO2(sessionCO2)}${totalSuffix} CO\u2082${projectSuffix}${syncSuffix}`;
 }

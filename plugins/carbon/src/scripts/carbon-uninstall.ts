@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 
 import { deleteConfig, getDatabasePath, initializeDatabase, openDatabase } from '../data-store';
+import { resolveProjectIdentifier } from '../project-identifier';
 
 function deleteProjectSessions(projectPath: string): { deleted: number; remaining: number } {
     const dbPath = getDatabasePath();
@@ -23,12 +24,15 @@ function deleteProjectSessions(projectPath: string): { deleted: number; remainin
 
     const db = openDatabase();
     try {
-        // Project paths may be stored encoded (slashes become dashes) or as-is
-        const encodedPath = projectPath.replace(/\//g, '-');
+        initializeDatabase(db);
 
+        const projectIdentifier = resolveProjectIdentifier(projectPath);
+
+        // Delete by project_identifier (new format) or legacy project_path formats
+        const encodedPath = projectPath.replace(/\//g, '-');
         const deleteResult = db
-            .prepare('DELETE FROM sessions WHERE project_path = ? OR project_path = ?')
-            .run(encodedPath, projectPath);
+            .prepare('DELETE FROM sessions WHERE project_identifier = ? OR project_path = ? OR project_path = ?')
+            .run(projectIdentifier, encodedPath, projectPath);
         const deleted = deleteResult.changes;
 
         const countRow = db.prepare('SELECT COUNT(*) as count FROM sessions').get() as {

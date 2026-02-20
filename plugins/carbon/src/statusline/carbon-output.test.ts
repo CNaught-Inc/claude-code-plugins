@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 const mockQueryReadonlyDb = mock((fn: any): any => null);
 
 mock.module('../data-store.js', () => ({
-    encodeProjectPath: (p: string) => p.replace(/\//g, '-'),
     queryReadonlyDb: mockQueryReadonlyDb
+}));
+
+mock.module('../project-identifier.js', () => ({
+    resolveProjectIdentifier: (p: string) => `test_project_abcd1234`
 }));
 
 const { getCarbonOutput } = await import('./carbon-output');
@@ -49,7 +52,7 @@ describe('getCarbonOutput', () => {
         expect(result).toStartWith('\u{1F331}');
     });
 
-    it('combines DB session CO2 with live CO2', () => {
+    it('uses DB session CO2 without adding live estimate', () => {
         // Call 1: getSessionCO2FromDb returns 1.5g
         // Call 2: getTotalCO2FromDb returns null
         // Call 3: getSyncInfo returns null
@@ -70,6 +73,7 @@ describe('getCarbonOutput', () => {
         });
 
         expect(result).toContain('Session:');
+        expect(result).toContain('1.50g');
         // Should not contain total since getTotalCO2FromDb returned null
         expect(result).not.toContain('/');
     });

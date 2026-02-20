@@ -1,4 +1,4 @@
-# /carbon:rename
+# /carbon:rename-user
 
 Update your display name for anonymous carbon tracking.
 
@@ -12,12 +12,12 @@ Ask the user what they'd like their new display name to be. Let them know they c
 
 If the user provided a name:
 ```bash
-bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename.ts --name "Their Name"
+bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-user.ts --name "Their Name"
 ```
 
 If the user wants a random name:
 ```bash
-bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename.ts
+bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-user.ts
 ```
 
 Show the output to the user.

@@ -140,6 +140,7 @@ describe('calculateSessionCarbon', () => {
         const result = calculateSessionCarbon({
             sessionId: 'test',
             projectPath: '/test',
+            projectIdentifier: 'test',
             records: [
                 {
                     requestId: 'r1',
@@ -187,6 +188,7 @@ describe('calculateSessionCarbon', () => {
         const result = calculateSessionCarbon({
             sessionId: 'test',
             projectPath: '/test',
+            projectIdentifier: 'test',
             records: [
                 {
                     requestId: 'r1',

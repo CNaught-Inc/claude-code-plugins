@@ -106,7 +106,7 @@ function sessionToInput(config: SyncConfig, session: SessionRecord) {
         sessionId: session.sessionId,
         claudeCodeUserId: config.userId,
         claudeCodeUserName: config.userName,
-        projectPath: session.projectPath,
+        projectPath: session.projectIdentifier || session.projectPath,
         co2Grams: session.co2Grams,
         totalInputTokens: session.inputTokens,
         totalOutputTokens: session.outputTokens,
@@ -170,7 +170,7 @@ export async function upsertSessions(
             claudeCodeUserName: config.userName,
             sessions: sessions.map((s) => ({
                 sessionId: s.sessionId,
-                projectPath: s.projectPath,
+                projectPath: s.projectIdentifier || s.projectPath,
                 co2Grams: s.co2Grams,
                 totalInputTokens: s.inputTokens,
                 totalOutputTokens: s.outputTokens,
