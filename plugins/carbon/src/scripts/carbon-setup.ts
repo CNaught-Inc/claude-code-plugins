@@ -13,6 +13,7 @@ import * as path from 'path';
 
 import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
 
+import { getDashboardUrl } from '../api-client';
 import { calculateSessionCarbon } from '../carbon-calculator';
 import {
     getAllSessionIds,
@@ -239,6 +240,10 @@ async function main(): Promise<void> {
         console.log('You will see CO2 emissions in your status bar.');
         if (shouldEnableSync) {
             console.log('Session data will sync to CNaught in the background.');
+            const userId = withDatabase((db) => getConfig(db, 'claude_code_user_id'));
+            if (userId) {
+                console.log(`\n  Dashboard: ${getDashboardUrl(userId)}`);
+            }
         }
         console.log('\n');
         console.log('Commands:');

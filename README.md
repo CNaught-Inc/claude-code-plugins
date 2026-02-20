@@ -55,7 +55,7 @@ If you have the plugin installed from GitHub and want to point at the staging AP
 ```json
 {
   "carbonTracker": {
-    "apiUrl": "https://api-stage.cnaught.com/graphql/public"
+    "apiUrl": "https://api-stage.cnaught.com"
   }
 }
 ```

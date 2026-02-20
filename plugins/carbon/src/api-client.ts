@@ -12,7 +12,8 @@ import type { SessionRecord } from './data-store';
 import { log, logError } from './utils/stdin';
 
 const REQUEST_TIMEOUT_MS = 10_000;
-export const DEFAULT_API_URL = 'https://api.cnaught.com/graphql/public';
+const GRAPHQL_PATH = '/graphql/public';
+export const DEFAULT_API_URL = 'https://api.cnaught.com';
 
 export interface SyncConfig {
     userId: string;
@@ -20,7 +21,7 @@ export interface SyncConfig {
 }
 
 /**
- * Get the API endpoint URL.
+ * Get the API base URL (without path).
  * Priority: CNAUGHT_API_URL env var > settings.local.json > default production URL.
  * The env var takes precedence so .env.local overrides always win during development.
  * The settings.local.json override lets users point at a staging API without plugin changes.
@@ -44,6 +45,21 @@ export function getApiUrl(): string {
 }
 
 /**
+ * Get the full GraphQL endpoint URL.
+ */
+export function getGraphqlUrl(): string {
+    return `${getApiUrl()}${GRAPHQL_PATH}`;
+}
+
+/**
+ * Get the emissions dashboard URL for a given user.
+ * Points to the API redirect endpoint which forwards to the correct frontend.
+ */
+export function getDashboardUrl(userId: string): string {
+    return `${getApiUrl()}/claude-code-emissions/${userId}`;
+}
+
+/**
  * Execute a GraphQL request against the CNaught API.
  * Returns the parsed response data, or null on any error.
  */
@@ -52,7 +68,7 @@ async function graphqlRequest<T>(
     variables: Record<string, unknown>
 ): Promise<T | null> {
     try {
-        const response = await fetch(getApiUrl(), {
+        const response = await fetch(getGraphqlUrl(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query, variables }),

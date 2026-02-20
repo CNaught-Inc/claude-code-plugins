@@ -9,6 +9,7 @@
  * - Project breakdown
  */
 
+import { getDashboardUrl } from '../api-client';
 import { calculateEquivalents, formatCO2, formatEnergy } from '../carbon-calculator';
 import {
     encodeProjectPath,
@@ -213,6 +214,9 @@ async function main(): Promise<void> {
             console.log(`  Status:          enabled`);
             console.log(`  Name:            ${syncInfo.userName || 'Unknown'}`);
             console.log(`  User ID:         ${syncInfo.userId || 'Unknown'}`);
+            if (syncInfo.userId) {
+                console.log(`  Dashboard:       ${getDashboardUrl(syncInfo.userId)}`);
+            }
             console.log(`  Pending sync:    ${syncInfo.pendingCount} session(s)`);
         } else {
             console.log('  Status:          disabled');
