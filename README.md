@@ -14,6 +14,7 @@ Track and offset carbon emissions from your Claude Code usage
 - Stores session data locally via SQLite
 - Provides status line integration showing session carbon impact
 - Includes commands for setup and reporting
+- Optionally configure to sync anonymous data to CNaught to enable emissions dashboard
 
 ## Installation
 
@@ -43,11 +44,23 @@ Then in Claude Code:
 
 Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
 
-To point at a staging API, create `plugins/carbon/.env.local`:
+### Staging API (installed plugins)
 
+By default, the plugin points at the production API.
+
+If you've installed a local copy of the plugin, to point at the stage API, copy `.env.local.sample` to `.env.local` before running.
+
+If you have the plugin installed from GitHub and want to point at the staging API, create `.claude/settings.local.json` in your project root:
+
+```json
+{
+  "carbonTracker": {
+    "apiUrl": "https://api-stage.cnaught.com/graphql/public"
+  }
+}
 ```
-CNAUGHT_API_URL=https://your-staging-api-url.com
-```
+
+Data is automatically stored in a separate database per API endpoint, so staging and production data never mix.
 
 ### Updating
 
