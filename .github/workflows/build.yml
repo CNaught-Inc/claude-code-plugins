@@ -1,4 +1,4 @@
-name: Build Plugins
+name: Typecheck & Test
 
 on:
   push:
