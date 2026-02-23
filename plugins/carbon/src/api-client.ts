@@ -113,7 +113,8 @@ function sessionToInput(config: SyncConfig, session: SessionRecord) {
         totalCacheCreationTokens: session.cacheCreationTokens,
         totalCacheReadTokens: session.cacheReadTokens,
         energyWh: session.energyWh,
-        startedAt: session.createdAt.toISOString()
+        startedAt: session.createdAt.toISOString(),
+        primaryModel: session.primaryModel
     };
 }
 
@@ -177,7 +178,8 @@ export async function upsertSessions(
                 totalCacheCreationTokens: s.cacheCreationTokens,
                 totalCacheReadTokens: s.cacheReadTokens,
                 energyWh: s.energyWh,
-                startedAt: s.createdAt.toISOString()
+                startedAt: s.createdAt.toISOString(),
+                primaryModel: s.primaryModel
             }))
         }
     });
