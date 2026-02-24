@@ -47,7 +47,7 @@ if (existsSync(nodeModulesMarker)) {
 // Install dependencies
 console.error('[carbon-tracker] Installing dependencies...');
 try {
-    execSync('bun install --production --frozen-lockfile', {
+    execSync(`${process.execPath} install --production --frozen-lockfile`, {
         cwd: pluginRoot,
         stdio: 'inherit',
         timeout: 30_000
@@ -55,7 +55,7 @@ try {
 } catch {
     // Retry without --frozen-lockfile in case lockfile is missing or stale
     try {
-        execSync('bun install --production', {
+        execSync(`${process.execPath} install --production`, {
             cwd: pluginRoot,
             stdio: 'inherit',
             timeout: 30_000

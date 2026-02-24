@@ -16,7 +16,7 @@ Ask the user to confirm: "This will delete carbon tracking data for this project
 Replace `<PROJECT_PATH>` with the user's actual project root directory (the top-level working directory from the conversation context — do NOT use `$(pwd)` as it may resolve to the wrong directory).
 
 ```bash
-bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-uninstall.ts --project-path "<PROJECT_PATH>"
+npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-uninstall.ts --project-path "<PROJECT_PATH>"
 ```
 
 This removes sessions for the current project. If no sessions remain from other projects, it also deletes the database. The statusline will also be removed.
