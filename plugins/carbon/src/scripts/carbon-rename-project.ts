@@ -11,13 +11,12 @@
  */
 
 import {
-    deleteConfig,
-    getConfig,
+    deleteProjectConfig,
     initializeDatabase,
     openDatabase,
-    setConfig
+    setProjectConfig
 } from '../data-store';
-import { resolveProjectIdentifier } from '../project-identifier';
+import { resolveProjectIdentifier, shortHash } from '../project-identifier';
 import { logError } from '../utils/stdin';
 
 function main(): void {
@@ -30,13 +29,14 @@ function main(): void {
         initializeDatabase(db);
 
         // Get the current project identifier before any changes
+        const projectHash = shortHash(process.cwd());
         const oldIdentifier = resolveProjectIdentifier(process.cwd());
 
         if (shouldReset) {
             // Remove the custom name so auto-detection kicks in
-            deleteConfig(db, 'project_name');
+            deleteProjectConfig(db, projectHash, 'project_name');
         } else if (newName) {
-            setConfig(db, 'project_name', newName);
+            setProjectConfig(db, projectHash, 'project_name', newName);
         } else {
             console.log('Error: provide --name "Name" or --reset');
             return;

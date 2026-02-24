@@ -382,7 +382,7 @@ export function parseSession(transcriptPath: string, rawProjectPath?: string): S
 
     return {
         sessionId,
-        projectPath,
+        projectPath: pathForIdentifier,
         projectIdentifier,
         records: allRecords,
         totals,

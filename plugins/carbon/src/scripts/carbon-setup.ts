@@ -7,7 +7,6 @@
  * 3. Optionally enables anonymous usage tracking with CNaught API
  */
 
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -24,12 +23,15 @@ import {
     openDatabase,
     setConfig,
     setInstalledAt,
+    setProjectConfig,
     withDatabase
 } from '../data-store';
+import { shortHash } from '../project-identifier';
 import { resolveProjectIdentifier } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
 import { findTranscriptsForProject, getSessionIdFromPath, parseSession } from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
+import { generateMachineUserId } from '../utils/machine-id';
 import { logError } from '../utils/stdin';
 import { configureSettings } from './setup-helpers';
 
@@ -148,8 +150,7 @@ async function configureSyncTracking(
             }
             setConfig(db, 'sync_enabled', 'true');
         } else {
-            // Generate new identity
-            const userId = crypto.randomUUID();
+            const userId = generateMachineUserId();
             const userName =
                 customUserName ||
                 uniqueNamesGenerator({
@@ -205,9 +206,10 @@ async function main(): Promise<void> {
             const isFirstInstall = getInstalledAt(db) === null;
             setInstalledAt(db);
 
-            // Store project name if provided
+            // Store project name if provided (scoped to this project's path hash)
             if (customProjectName) {
-                setConfig(db, 'project_name', customProjectName);
+                const projectHash = shortHash(process.cwd());
+                setProjectConfig(db, projectHash, 'project_name', customProjectName);
                 console.log(`  Project name set to "${customProjectName}"`);
             }
 

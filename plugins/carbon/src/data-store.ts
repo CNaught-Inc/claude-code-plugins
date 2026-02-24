@@ -120,7 +120,9 @@ function ensureDbDirectory(): void {
 export function openDatabase(): Database {
     ensureDbDirectory();
     const dbPath = getDatabasePath();
-    return new Database(dbPath);
+    const db = new Database(dbPath);
+    db.exec('PRAGMA journal_mode=WAL');
+    return db;
 }
 
 /**
@@ -185,6 +187,20 @@ export const MIGRATIONS: Migration[] = [
                     'CREATE INDEX IF NOT EXISTS idx_sessions_project_identifier ON sessions(project_identifier)'
                 );
             }
+        }
+    },
+    {
+        version: 3,
+        description: 'Add project_config table for per-project settings',
+        up: (db) => {
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS project_config (
+                    project_hash TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    PRIMARY KEY (project_hash, key)
+                )
+            `);
         }
     }
 ];
@@ -468,6 +484,39 @@ export function setConfig(db: Database, key: string, value: string): void {
  */
 export function deleteConfig(db: Database, key: string): void {
     db.prepare('DELETE FROM plugin_config WHERE key = ?').run(key);
+}
+
+/**
+ * Get a value from the project_config table (per-project settings)
+ */
+export function getProjectConfig(db: Database, projectHash: string, key: string): string | null {
+    const stmt = db.prepare('SELECT value FROM project_config WHERE project_hash = ? AND key = ?');
+    const row = stmt.get(projectHash, key) as { value: string } | undefined;
+    return row?.value ?? null;
+}
+
+/**
+ * Set a value in the project_config table (upsert)
+ */
+export function setProjectConfig(
+    db: Database,
+    projectHash: string,
+    key: string,
+    value: string
+): void {
+    db.prepare(
+        'INSERT INTO project_config (project_hash, key, value) VALUES (?, ?, ?) ON CONFLICT(project_hash, key) DO UPDATE SET value = excluded.value'
+    ).run(projectHash, key, value);
+}
+
+/**
+ * Delete a value from the project_config table
+ */
+export function deleteProjectConfig(db: Database, projectHash: string, key: string): void {
+    db.prepare('DELETE FROM project_config WHERE project_hash = ? AND key = ?').run(
+        projectHash,
+        key
+    );
 }
 
 /**
