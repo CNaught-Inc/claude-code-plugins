@@ -394,7 +394,7 @@ export function parseSession(transcriptPath: string, rawProjectPath?: string): S
 }
 
 /**
- * Find all orphaned transcripts (files without matching DB records)
+ * Find all transcript files across all projects
  */
 export function findAllTranscripts(): string[] {
     const projectsDir = getClaudeProjectsDir();
@@ -419,6 +419,35 @@ export function findAllTranscripts(): string[] {
                 if (file.endsWith('.jsonl')) {
                     transcripts.push(path.join(projectDir, file));
                 }
+            }
+        }
+    } catch {
+        // Ignore errors
+    }
+
+    return transcripts;
+}
+
+/**
+ * Find transcript files for a specific project path.
+ * The project path is encoded by replacing slashes with dashes
+ * (e.g., /Users/foo/bar → -Users-foo-bar).
+ */
+export function findTranscriptsForProject(projectPath: string): string[] {
+    const projectsDir = getClaudeProjectsDir();
+    const encodedPath = projectPath.replace(/\//g, '-');
+    const projectDir = path.join(projectsDir, encodedPath);
+    const transcripts: string[] = [];
+
+    if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
+        return transcripts;
+    }
+
+    try {
+        const files = fs.readdirSync(projectDir);
+        for (const file of files) {
+            if (file.endsWith('.jsonl')) {
+                transcripts.push(path.join(projectDir, file));
             }
         }
     } catch {

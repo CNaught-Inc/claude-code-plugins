@@ -28,7 +28,7 @@ import {
 } from '../data-store';
 import { resolveProjectIdentifier } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
-import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
+import { findTranscriptsForProject, getSessionIdFromPath, parseSession } from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
 import { logError } from '../utils/stdin';
 import { configureSettings } from './setup-helpers';
@@ -86,10 +86,11 @@ function migrateFromGlobalStatusline(): void {
 
 /**
  * Backfill historical sessions from transcript files on disk.
+ * Only processes sessions for the given project path.
  */
-function backfillSessions(db: import('bun:sqlite').Database): number {
+function backfillSessions(db: import('bun:sqlite').Database, projectPath: string): number {
     const existingSessionIds = new Set(getAllSessionIds(db));
-    const transcripts = findAllTranscripts();
+    const transcripts = findTranscriptsForProject(projectPath);
     let count = 0;
 
     for (const transcriptPath of transcripts) {
@@ -217,7 +218,7 @@ async function main(): Promise<void> {
 
             if (shouldBackfill) {
                 console.log('  Backfilling historical sessions...');
-                const backfilled = backfillSessions(db);
+                const backfilled = backfillSessions(db, process.cwd());
                 console.log(`  Backfilled ${backfilled} historical session(s)`);
             }
         });
