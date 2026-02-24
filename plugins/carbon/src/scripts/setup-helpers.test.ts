@@ -151,6 +151,37 @@ describe('configureSettings', () => {
         expect(statusLine.command).not.toContain('statusline-wrapper.ts');
     });
 
+    it('uses project settings.json statusline over global settings', () => {
+        const globalSettingsPath = path.join(tmpDir, 'global-settings.json');
+        fs.writeFileSync(
+            globalSettingsPath,
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
+            })
+        );
+
+        // Project settings.json disables the statusline with "true" (no-op)
+        fs.writeFileSync(
+            path.join(projectDir, '.claude', 'settings.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'true' }
+            })
+        );
+
+        // Empty project local settings
+        fs.writeFileSync(path.join(projectDir, '.claude', 'settings.local.json'), '{}');
+
+        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+
+        expect(result.success).toBe(true);
+        const settings = readSettings();
+        const statusLine = settings.statusLine as { command: string };
+        // Should NOT wrap the global ccstatusline — project settings.json overrides it
+        // "true" is not a carbon statusline, so it wraps "true" (which is harmless)
+        // but crucially it does NOT pick up ccstatusline from global
+        expect(statusLine.command).not.toContain('ccstatusline');
+    });
+
     it('picks up statusline from global settings when project has none', () => {
         const globalSettingsPath = path.join(tmpDir, 'global-settings.json');
         fs.writeFileSync(

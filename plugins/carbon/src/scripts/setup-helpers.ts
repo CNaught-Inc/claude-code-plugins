@@ -74,7 +74,25 @@ export function configureSettings(opts: ConfigureSettingsOptions): ConfigureSett
             existingStatusLine = settings.statusLine as Record<string, unknown> | undefined;
         }
         if (!existingStatusLine || typeof existingStatusLine !== 'object') {
-            // Check global settings (Claude Code cascades: project > global)
+            // Check project-level settings.json (higher priority than global)
+            const projectSettingsPath = path.join(claudeProjectDir, 'settings.json');
+            try {
+                if (fs.existsSync(projectSettingsPath)) {
+                    const projectContent = fs.readFileSync(projectSettingsPath, 'utf-8');
+                    const projectSettings = JSON.parse(projectContent);
+                    if (
+                        projectSettings.statusLine &&
+                        typeof projectSettings.statusLine === 'object'
+                    ) {
+                        existingStatusLine = projectSettings.statusLine as Record<string, unknown>;
+                    }
+                }
+            } catch {
+                // Non-critical, ignore
+            }
+        }
+        if (!existingStatusLine || typeof existingStatusLine !== 'object') {
+            // Check global settings (lowest priority in cascade)
             const globalSettingsPath = opts.globalSettingsPath;
             try {
                 if (globalSettingsPath && fs.existsSync(globalSettingsPath)) {
