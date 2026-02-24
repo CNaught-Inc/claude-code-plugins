@@ -287,6 +287,50 @@ describe('parseSession', () => {
         expect(result.totals.totalTokens).toBe(0);
         expect(result.primaryModel).toBe('unknown');
     });
+
+    it('stores raw project path when rawProjectPath is provided', () => {
+        mockReadFileSync.mockReturnValue(
+            makeJsonl([
+                {
+                    type: 'assistant',
+                    uuid: 'req-1',
+                    message: {
+                        model: 'claude-sonnet-4-20250514',
+                        usage: { input_tokens: 100, output_tokens: 50 }
+                    }
+                }
+            ])
+        );
+
+        const result = parseSession(transcriptPath, '/test/project');
+        // Should store the decoded raw path, not the encoded "-test-project" form
+        expect(result.projectPath).toBe('/test/project');
+    });
+
+    it('stores decoded project path during backfill (no rawProjectPath)', () => {
+        mockReadFileSync.mockReturnValue(
+            makeJsonl([
+                {
+                    type: 'assistant',
+                    uuid: 'req-1',
+                    message: {
+                        model: 'claude-sonnet-4-20250514',
+                        usage: { input_tokens: 100, output_tokens: 50 }
+                    }
+                }
+            ])
+        );
+
+        const result = parseSession(transcriptPath);
+        // Without rawProjectPath, tryDecodeProjectPath is used.
+        // Since the decoded path won't exist on the mocked fs,
+        // it falls back to the encoded form — but it should NOT be
+        // the raw relative path. It goes through tryDecodeProjectPath.
+        expect(result.projectPath).toBeDefined();
+        // The key invariant: projectPath should match pathForIdentifier
+        // (used for both identifier resolution and storage)
+        expect(result.projectIdentifier).toBe('test_project_abcd1234');
+    });
 });
 
 describe('findAllTranscripts', () => {

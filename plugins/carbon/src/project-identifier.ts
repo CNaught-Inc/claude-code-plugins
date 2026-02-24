@@ -13,7 +13,7 @@
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 
-import { getConfig, queryReadonlyDb } from './data-store';
+import { getConfig, getProjectConfig, queryReadonlyDb } from './data-store';
 
 /**
  * Compute the first 8 hex chars of SHA-256 for a string.
@@ -64,9 +64,13 @@ function getGitRemoteUrl(rawPath: string): string | null {
 
 /**
  * Get the user-configured project name from the database, if any.
+ * Checks per-project config first, then falls back to the legacy global key.
  */
-function getConfiguredProjectName(): string | null {
-    return queryReadonlyDb((db) => getConfig(db, 'project_name'));
+function getConfiguredProjectName(rawPath: string): string | null {
+    const hash = shortHash(rawPath);
+    return queryReadonlyDb((db) => {
+        return getProjectConfig(db, hash, 'project_name') ?? getConfig(db, 'project_name');
+    });
 }
 
 /**
@@ -81,7 +85,7 @@ export function resolveProjectIdentifier(rawPath: string): string {
     const hash = shortHash(rawPath);
 
     // Check for user-configured name
-    const customName = getConfiguredProjectName();
+    const customName = getConfiguredProjectName(rawPath);
     if (customName) {
         return `${customName}_${hash}`;
     }

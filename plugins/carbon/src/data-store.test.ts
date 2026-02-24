@@ -6,6 +6,7 @@ import type { SessionRecord } from './data-store';
 import {
     columnExists,
     deleteConfig,
+    deleteProjectConfig,
     getAggregateStats,
     getAllSessionIds,
     getClaudeDir,
@@ -14,6 +15,7 @@ import {
     getDatabasePath,
     getHomeDir,
     getInstalledAt,
+    getProjectConfig,
     getProjectStats,
     getSession,
     getUnsyncedSessions,
@@ -23,6 +25,7 @@ import {
     sessionExists,
     setConfig,
     setInstalledAt,
+    setProjectConfig,
     upsertSession
 } from './data-store';
 
@@ -542,6 +545,15 @@ describe('migrations', () => {
         db.close();
     });
 
+    it('migration v3 creates project_config table', () => {
+        const db = createTestDb();
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+            name: string;
+        }[];
+        expect(tables.map((t) => t.name)).toContain('project_config');
+        db.close();
+    });
+
     it('applies only pending migrations when version is behind', () => {
         const db = new Database(':memory:');
         initializeDatabase(db);
@@ -653,6 +665,54 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(1);
         expect(unsynced[0].sessionId).toBe('s1');
+        db.close();
+    });
+});
+
+describe('getProjectConfig / setProjectConfig / deleteProjectConfig', () => {
+    it('returns null for nonexistent key', () => {
+        const db = createTestDb();
+        expect(getProjectConfig(db, 'hash1234', 'project_name')).toBeNull();
+        db.close();
+    });
+
+    it('sets and retrieves a project config value', () => {
+        const db = createTestDb();
+        setProjectConfig(db, 'hash1234', 'project_name', 'My Project');
+        expect(getProjectConfig(db, 'hash1234', 'project_name')).toBe('My Project');
+        db.close();
+    });
+
+    it('isolates values by project hash', () => {
+        const db = createTestDb();
+        setProjectConfig(db, 'aaaa1111', 'project_name', 'Project A');
+        setProjectConfig(db, 'bbbb2222', 'project_name', 'Project B');
+
+        expect(getProjectConfig(db, 'aaaa1111', 'project_name')).toBe('Project A');
+        expect(getProjectConfig(db, 'bbbb2222', 'project_name')).toBe('Project B');
+        db.close();
+    });
+
+    it('overwrites existing value on upsert', () => {
+        const db = createTestDb();
+        setProjectConfig(db, 'hash1234', 'project_name', 'Old Name');
+        setProjectConfig(db, 'hash1234', 'project_name', 'New Name');
+        expect(getProjectConfig(db, 'hash1234', 'project_name')).toBe('New Name');
+        db.close();
+    });
+
+    it('deletes a project config key', () => {
+        const db = createTestDb();
+        setProjectConfig(db, 'hash1234', 'project_name', 'My Project');
+        deleteProjectConfig(db, 'hash1234', 'project_name');
+        expect(getProjectConfig(db, 'hash1234', 'project_name')).toBeNull();
+        db.close();
+    });
+
+    it('deleting nonexistent key is a no-op', () => {
+        const db = createTestDb();
+        deleteProjectConfig(db, 'hash1234', 'nonexistent');
+        expect(getProjectConfig(db, 'hash1234', 'nonexistent')).toBeNull();
         db.close();
     });
 });
