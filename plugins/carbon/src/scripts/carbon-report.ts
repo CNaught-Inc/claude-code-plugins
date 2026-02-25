@@ -9,6 +9,8 @@
  * - Project breakdown
  */
 
+import '../utils/load-env';
+
 import { getDashboardUrl } from '../api-client';
 import { calculateEquivalents, formatCO2, formatEnergy } from '../carbon-calculator';
 import {

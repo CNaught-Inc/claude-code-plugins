@@ -9,7 +9,7 @@
                     },
                     {
                         "type": "command",
-                        "command": "npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/hooks/session-start.ts"
+                        "command": "npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/session-start.ts"
                     }
                 ]
             }
@@ -19,11 +19,11 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/hooks/stop.ts"
+                        "command": "npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/stop.ts"
                     },
                     {
                         "type": "command",
-                        "command": "npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/hooks/sync.ts",
+                        "command": "npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/sync.ts",
                         "async": true,
                         "timeout": 15
                     }

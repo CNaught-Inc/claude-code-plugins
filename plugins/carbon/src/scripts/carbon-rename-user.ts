@@ -7,6 +7,8 @@
  *   carbon-rename.js --name "New Name"
  */
 
+import '../utils/load-env';
+
 import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
 
 import { getConfig, initializeDatabase, openDatabase, setConfig } from '../data-store';

@@ -10,6 +10,8 @@
  * If session crashes or user force-quits, data up to last response is preserved.
  */
 
+import '../utils/load-env';
+
 import { calculateSessionCarbon } from '../carbon-calculator';
 import { withDatabase } from '../data-store';
 import { saveSessionToDb } from '../session-db';

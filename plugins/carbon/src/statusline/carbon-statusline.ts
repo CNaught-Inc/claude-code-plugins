@@ -22,6 +22,8 @@
  * 🌱 session: 2.45g · total: 123.45g CO₂
  */
 
+import '../utils/load-env';
+
 import { readStdinJson, StatuslineInputSchema } from '../utils/stdin';
 import { getCarbonOutput } from './carbon-output';
 

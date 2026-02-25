@@ -10,6 +10,8 @@
  *   carbon-rename-project.ts --reset
  */
 
+import '../utils/load-env';
+
 import {
     deleteProjectConfig,
     initializeDatabase,

@@ -6,6 +6,8 @@
  * - Non-blocking (errors logged but don't fail the hook)
  */
 
+import '../utils/load-env';
+
 import type { z } from 'zod';
 
 import { withDatabase } from '../data-store';

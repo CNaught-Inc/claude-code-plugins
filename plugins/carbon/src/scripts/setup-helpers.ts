@@ -41,7 +41,6 @@ export interface ConfigureSettingsResult {
 export function configureSettings(opts: ConfigureSettingsOptions): ConfigureSettingsResult {
     const claudeProjectDir = path.join(opts.projectDir, '.claude');
     const settingsPath = path.join(claudeProjectDir, 'settings.local.json');
-    const envFile = path.join(opts.pluginRoot, '.env.local');
     const standaloneScript = path.join(
         opts.pluginRoot,
         'src',
@@ -121,13 +120,13 @@ export function configureSettings(opts: ConfigureSettingsOptions): ConfigureSett
             const originalCommand = (existingStatusLine as { command: string }).command;
             settings.statusLine = {
                 type: 'command',
-                command: `npx -y bun --env-file=${envFile} ${wrapperScript} --original-command "${originalCommand}"`
+                command: `npx -y bun ${wrapperScript} --original-command "${originalCommand}"`
             };
         } else {
             // No external statusline (or already ours): install standalone
             settings.statusLine = {
                 type: 'command',
-                command: `npx -y bun --env-file=${envFile} ${standaloneScript}`
+                command: `npx -y bun ${standaloneScript}`
             };
         }
 

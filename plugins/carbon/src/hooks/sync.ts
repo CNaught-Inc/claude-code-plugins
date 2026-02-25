@@ -8,6 +8,8 @@
  * are independent: local save is synchronous, API sync is background.
  */
 
+import '../utils/load-env';
+
 import { syncSessionIfEnabled } from '../sync';
 import { log, readStdinJson, runHook, StopInputSchema } from '../utils/stdin';
 

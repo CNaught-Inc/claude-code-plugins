@@ -14,12 +14,12 @@ If they want to reset to the default (auto-detected from git), they can say "res
 
 If the user provided a name:
 ```bash
-npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-project.ts --name "Their Project Name"
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-project.ts --name "Their Project Name"
 ```
 
 If the user wants to reset to the default:
 ```bash
-npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-project.ts --reset
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-project.ts --reset
 ```
 
 Show the output to the user.

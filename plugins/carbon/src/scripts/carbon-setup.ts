@@ -7,6 +7,8 @@
  * 3. Optionally enables anonymous usage tracking with CNaught API
  */
 
+import '../utils/load-env';
+
 import * as fs from 'fs';
 import * as path from 'path';
 

@@ -11,6 +11,8 @@
  * Output: "<original output> | 🌱 session: 2.45g CO₂"
  */
 
+import '../utils/load-env';
+
 import { spawnSync } from 'node:child_process';
 
 import { readStdin, StatuslineInputSchema } from '../utils/stdin';

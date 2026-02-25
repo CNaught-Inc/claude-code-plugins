@@ -11,6 +11,8 @@
  *   carbon-uninstall.js --project-path /path/to/project
  */
 
+import '../utils/load-env';
+
 import * as fs from 'fs';
 
 import { deleteConfig, getDatabasePath, initializeDatabase, openDatabase } from '../data-store';

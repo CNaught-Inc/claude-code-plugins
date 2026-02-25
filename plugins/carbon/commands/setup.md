@@ -36,7 +36,7 @@ Build the command with the appropriate flags based on the user's choices:
 - Add `--project-name "Their Project Name"` if the user provided a custom project name
 
 ```bash
-npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup.ts [--backfill] [--enable-sync] [--user-name "Name"] [--project-name "Project"]
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup.ts [--backfill] [--enable-sync] [--user-name "Name"] [--project-name "Project"]
 ```
 
 This will:
@@ -50,7 +50,7 @@ This will:
 ### Step 5: Verify setup
 
 ```bash
-npx -y bun --env-file=${CLAUDE_PLUGIN_ROOT}/.env.local ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-report.ts
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-report.ts
 ```
 
 Show the output to the user and confirm that the database is initialized, the statusline is installed, and CO2 tracking is active.
