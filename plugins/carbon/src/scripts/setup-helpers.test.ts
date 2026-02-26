@@ -3,7 +3,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { configureSettings, isCarbonStatusLine } from './setup-helpers';
+import {
+    cleanupAllInstallations,
+    configureSettings,
+    convertToUserScope,
+    getInstalledPluginEntries,
+    isCarbonStatusLine
+} from './setup-helpers';
 
 describe('isCarbonStatusLine', () => {
     it('detects statusline-carbon', () => {
@@ -29,19 +35,330 @@ describe('isCarbonStatusLine', () => {
     });
 });
 
+describe('getInstalledPluginEntries', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon-test-'));
+        fs.mkdirSync(path.join(tmpDir, 'plugins'), { recursive: true });
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('returns empty array when file does not exist', () => {
+        expect(getInstalledPluginEntries(tmpDir)).toEqual([]);
+    });
+
+    it('returns empty array when plugin is not in file', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({ version: 2, plugins: {} })
+        );
+        expect(getInstalledPluginEntries(tmpDir)).toEqual([]);
+    });
+
+    it('returns entries for the carbon plugin', () => {
+        const entries = [
+            {
+                scope: 'local',
+                installPath: '/path/to/cache',
+                version: '2.0.0',
+                installedAt: '2026-01-01T00:00:00.000Z',
+                lastUpdated: '2026-01-01T00:00:00.000Z',
+                projectPath: '/project/a'
+            }
+        ];
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({ version: 2, plugins: { 'carbon@cnaught-plugins': entries } })
+        );
+        const result = getInstalledPluginEntries(tmpDir);
+        expect(result).toHaveLength(1);
+        expect(result[0].scope).toBe('local');
+        expect(result[0].projectPath).toBe('/project/a');
+    });
+});
+
+describe('convertToUserScope', () => {
+    let tmpDir: string;
+    let projectA: string;
+    let projectB: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon-test-'));
+        fs.mkdirSync(path.join(tmpDir, 'plugins'), { recursive: true });
+        projectA = path.join(tmpDir, 'project-a');
+        projectB = path.join(tmpDir, 'project-b');
+        fs.mkdirSync(path.join(projectA, '.claude'), { recursive: true });
+        fs.mkdirSync(path.join(projectB, '.claude'), { recursive: true });
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('does nothing when no entries exist', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({ version: 2, plugins: {} })
+        );
+        convertToUserScope(tmpDir);
+        // Should not throw
+    });
+
+    it('cleans up project settings and converts to user scope', () => {
+        // Set up local-scope entries
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({
+                version: 2,
+                plugins: {
+                    'carbon@cnaught-plugins': [
+                        {
+                            scope: 'local',
+                            installPath: '/cache/carbon/2.0.0',
+                            version: '2.0.0',
+                            installedAt: '2026-01-01T00:00:00.000Z',
+                            lastUpdated: '2026-01-01T00:00:00.000Z',
+                            projectPath: projectA
+                        },
+                        {
+                            scope: 'local',
+                            installPath: '/cache/carbon/2.0.0',
+                            version: '2.0.0',
+                            installedAt: '2026-01-02T00:00:00.000Z',
+                            lastUpdated: '2026-01-02T00:00:00.000Z',
+                            projectPath: projectB
+                        }
+                    ]
+                }
+            })
+        );
+
+        // Set up project settings with carbon statuslines
+        fs.writeFileSync(
+            path.join(projectA, '.claude', 'settings.local.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                enabledPlugins: { 'carbon@cnaught-plugins': true }
+            })
+        );
+        fs.writeFileSync(
+            path.join(projectB, '.claude', 'settings.local.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                enabledPlugins: { 'carbon@cnaught-plugins': true, 'other-plugin': true }
+            })
+        );
+
+        convertToUserScope(tmpDir);
+
+        // Project A: statusline and enabledPlugins removed
+        const settingsA = JSON.parse(
+            fs.readFileSync(path.join(projectA, '.claude', 'settings.local.json'), 'utf-8')
+        );
+        expect(settingsA.statusLine).toBeUndefined();
+        expect(settingsA.enabledPlugins).toBeUndefined();
+
+        // Project B: statusline removed, other plugin preserved
+        const settingsB = JSON.parse(
+            fs.readFileSync(path.join(projectB, '.claude', 'settings.local.json'), 'utf-8')
+        );
+        expect(settingsB.statusLine).toBeUndefined();
+        expect(settingsB.enabledPlugins).toEqual({ 'other-plugin': true });
+
+        // Global settings.json has enabledPlugins
+        const globalSettings = JSON.parse(
+            fs.readFileSync(path.join(tmpDir, 'settings.json'), 'utf-8')
+        );
+        expect(globalSettings.enabledPlugins['carbon@cnaught-plugins']).toBe(true);
+
+        // installed_plugins.json has single user-scope entry
+        const installed = JSON.parse(
+            fs.readFileSync(path.join(tmpDir, 'plugins', 'installed_plugins.json'), 'utf-8')
+        );
+        const entries = installed.plugins['carbon@cnaught-plugins'];
+        expect(entries).toHaveLength(1);
+        expect(entries[0].scope).toBe('user');
+        expect(entries[0].projectPath).toBeUndefined();
+    });
+
+    it('keeps existing user-scope entry when converting', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({
+                version: 2,
+                plugins: {
+                    'carbon@cnaught-plugins': [
+                        {
+                            scope: 'user',
+                            installPath: '/cache/carbon/2.0.0',
+                            version: '2.0.0',
+                            installedAt: '2026-01-01T00:00:00.000Z',
+                            lastUpdated: '2026-01-01T00:00:00.000Z'
+                        },
+                        {
+                            scope: 'local',
+                            installPath: '/cache/carbon/2.0.0',
+                            version: '2.0.0',
+                            installedAt: '2026-01-02T00:00:00.000Z',
+                            lastUpdated: '2026-01-02T00:00:00.000Z',
+                            projectPath: projectA
+                        }
+                    ]
+                }
+            })
+        );
+
+        fs.writeFileSync(
+            path.join(projectA, '.claude', 'settings.local.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                enabledPlugins: { 'carbon@cnaught-plugins': true }
+            })
+        );
+
+        convertToUserScope(tmpDir);
+
+        const installed = JSON.parse(
+            fs.readFileSync(path.join(tmpDir, 'plugins', 'installed_plugins.json'), 'utf-8')
+        );
+        const entries = installed.plugins['carbon@cnaught-plugins'];
+        expect(entries).toHaveLength(1);
+        expect(entries[0].scope).toBe('user');
+        expect(entries[0].installedAt).toBe('2026-01-01T00:00:00.000Z'); // kept the user entry
+    });
+
+    it('restores _carbonOriginalStatusLine when cleaning up', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({
+                version: 2,
+                plugins: {
+                    'carbon@cnaught-plugins': [
+                        {
+                            scope: 'local',
+                            installPath: '/cache/carbon/2.0.0',
+                            version: '2.0.0',
+                            installedAt: '2026-01-01T00:00:00.000Z',
+                            lastUpdated: '2026-01-01T00:00:00.000Z',
+                            projectPath: projectA
+                        }
+                    ]
+                }
+            })
+        );
+
+        fs.writeFileSync(
+            path.join(projectA, '.claude', 'settings.local.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'npx -y bun /path/to/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"' },
+                _carbonOriginalStatusLine: { type: 'command', command: 'bunx ccstatusline@latest' },
+                enabledPlugins: { 'carbon@cnaught-plugins': true }
+            })
+        );
+
+        convertToUserScope(tmpDir);
+
+        const settingsA = JSON.parse(
+            fs.readFileSync(path.join(projectA, '.claude', 'settings.local.json'), 'utf-8')
+        );
+        // Original statusline should be restored
+        expect(settingsA.statusLine).toEqual({ type: 'command', command: 'bunx ccstatusline@latest' });
+        expect(settingsA._carbonOriginalStatusLine).toBeUndefined();
+    });
+});
+
+describe('cleanupAllInstallations', () => {
+    let tmpDir: string;
+    let projectA: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon-test-'));
+        fs.mkdirSync(path.join(tmpDir, 'plugins'), { recursive: true });
+        projectA = path.join(tmpDir, 'project-a');
+        fs.mkdirSync(path.join(projectA, '.claude'), { recursive: true });
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('cleans up all settings files and installed_plugins.json', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'plugins', 'installed_plugins.json'),
+            JSON.stringify({
+                version: 2,
+                plugins: {
+                    'carbon@cnaught-plugins': [
+                        {
+                            scope: 'local',
+                            installPath: '/cache',
+                            version: '2.0.0',
+                            installedAt: '2026-01-01T00:00:00.000Z',
+                            lastUpdated: '2026-01-01T00:00:00.000Z',
+                            projectPath: projectA
+                        }
+                    ],
+                    'other-plugin@marketplace': [
+                        { scope: 'user', installPath: '/other', version: '1.0.0', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' }
+                    ]
+                }
+            })
+        );
+
+        fs.writeFileSync(
+            path.join(projectA, '.claude', 'settings.local.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                enabledPlugins: { 'carbon@cnaught-plugins': true }
+            })
+        );
+
+        fs.writeFileSync(
+            path.join(tmpDir, 'settings.json'),
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                enabledPlugins: { 'carbon@cnaught-plugins': true }
+            })
+        );
+
+        cleanupAllInstallations(tmpDir);
+
+        // Project settings cleaned
+        const settingsA = JSON.parse(
+            fs.readFileSync(path.join(projectA, '.claude', 'settings.local.json'), 'utf-8')
+        );
+        expect(settingsA.statusLine).toBeUndefined();
+        expect(settingsA.enabledPlugins).toBeUndefined();
+
+        // Global settings cleaned
+        const globalSettings = JSON.parse(
+            fs.readFileSync(path.join(tmpDir, 'settings.json'), 'utf-8')
+        );
+        expect(globalSettings.statusLine).toBeUndefined();
+        expect(globalSettings.enabledPlugins).toBeUndefined();
+
+        // installed_plugins.json: carbon removed, other plugin preserved
+        const installed = JSON.parse(
+            fs.readFileSync(path.join(tmpDir, 'plugins', 'installed_plugins.json'), 'utf-8')
+        );
+        expect(installed.plugins['carbon@cnaught-plugins']).toBeUndefined();
+        expect(installed.plugins['other-plugin@marketplace']).toBeDefined();
+    });
+});
+
 describe('configureSettings', () => {
     let tmpDir: string;
-    let projectDir: string;
+    let targetSettingsPath: string;
     let pluginRoot: string;
-    /** Points to a non-existent file so tests don't pick up the real ~/.claude/settings.json */
-    let globalSettingsPath: string;
 
     beforeEach(() => {
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon-setup-test-'));
-        projectDir = path.join(tmpDir, 'project');
+        targetSettingsPath = path.join(tmpDir, 'settings.json');
         pluginRoot = path.join(tmpDir, 'plugin');
-        globalSettingsPath = path.join(tmpDir, 'nonexistent-global-settings.json');
-        fs.mkdirSync(path.join(projectDir, '.claude'), { recursive: true });
         fs.mkdirSync(path.join(pluginRoot, 'src', 'statusline'), { recursive: true });
     });
 
@@ -50,15 +367,12 @@ describe('configureSettings', () => {
     });
 
     function readSettings(): Record<string, unknown> {
-        const content = fs.readFileSync(
-            path.join(projectDir, '.claude', 'settings.local.json'),
-            'utf-8'
-        );
+        const content = fs.readFileSync(targetSettingsPath, 'utf-8');
         return JSON.parse(content);
     }
 
     it('installs standalone statusline when no existing statusline', () => {
-        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        const result = configureSettings({ targetSettingsPath, pluginRoot });
 
         expect(result.success).toBe(true);
         const settings = readSettings();
@@ -69,13 +383,13 @@ describe('configureSettings', () => {
 
     it('wraps existing non-carbon statusline', () => {
         fs.writeFileSync(
-            path.join(projectDir, '.claude', 'settings.local.json'),
+            targetSettingsPath,
             JSON.stringify({
                 statusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
             })
         );
 
-        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        const result = configureSettings({ targetSettingsPath, pluginRoot });
 
         expect(result.success).toBe(true);
         const settings = readSettings();
@@ -87,17 +401,16 @@ describe('configureSettings', () => {
     });
 
     it('does not double-wrap on re-setup', () => {
-        // First setup: wrap an existing statusline
         fs.writeFileSync(
-            path.join(projectDir, '.claude', 'settings.local.json'),
+            targetSettingsPath,
             JSON.stringify({
                 statusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
             })
         );
-        configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        configureSettings({ targetSettingsPath, pluginRoot });
 
         // Second setup: should use saved original, not the wrapped command
-        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        const result = configureSettings({ targetSettingsPath, pluginRoot });
 
         expect(result.success).toBe(true);
         const settings = readSettings();
@@ -114,15 +427,15 @@ describe('configureSettings', () => {
 
     it('does not double-wrap after three consecutive setups', () => {
         fs.writeFileSync(
-            path.join(projectDir, '.claude', 'settings.local.json'),
+            targetSettingsPath,
             JSON.stringify({
                 statusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
             })
         );
 
-        configureSettings({ projectDir, pluginRoot, globalSettingsPath });
-        configureSettings({ projectDir, pluginRoot, globalSettingsPath });
-        configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        configureSettings({ targetSettingsPath, pluginRoot });
+        configureSettings({ targetSettingsPath, pluginRoot });
+        configureSettings({ targetSettingsPath, pluginRoot });
 
         const settings = readSettings();
         const statusLine = settings.statusLine as { command: string };
@@ -135,13 +448,13 @@ describe('configureSettings', () => {
 
     it('installs standalone when existing statusline is carbon', () => {
         fs.writeFileSync(
-            path.join(projectDir, '.claude', 'settings.local.json'),
+            targetSettingsPath,
             JSON.stringify({
                 statusLine: { type: 'command', command: 'node /old/path/carbon-statusline.ts' }
             })
         );
 
-        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        const result = configureSettings({ targetSettingsPath, pluginRoot });
 
         expect(result.success).toBe(true);
         const settings = readSettings();
@@ -151,84 +464,28 @@ describe('configureSettings', () => {
         expect(statusLine.command).not.toContain('statusline-wrapper.ts');
     });
 
-    it('uses project settings.json statusline over global settings', () => {
-        const globalSettingsPath = path.join(tmpDir, 'global-settings.json');
-        fs.writeFileSync(
-            globalSettingsPath,
-            JSON.stringify({
-                statusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
-            })
-        );
-
-        // Project settings.json disables the statusline with "true" (no-op)
-        fs.writeFileSync(
-            path.join(projectDir, '.claude', 'settings.json'),
-            JSON.stringify({
-                statusLine: { type: 'command', command: 'true' }
-            })
-        );
-
-        // Empty project local settings
-        fs.writeFileSync(path.join(projectDir, '.claude', 'settings.local.json'), '{}');
-
-        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
-
-        expect(result.success).toBe(true);
-        const settings = readSettings();
-        const statusLine = settings.statusLine as { command: string };
-        // Should NOT wrap the global ccstatusline — project settings.json overrides it
-        // "true" is not a carbon statusline, so it wraps "true" (which is harmless)
-        // but crucially it does NOT pick up ccstatusline from global
-        expect(statusLine.command).not.toContain('ccstatusline');
-    });
-
-    it('picks up statusline from global settings when project has none', () => {
-        const globalSettingsPath = path.join(tmpDir, 'global-settings.json');
-        fs.writeFileSync(
-            globalSettingsPath,
-            JSON.stringify({
-                statusLine: { type: 'command', command: 'bunx globalstatusline@latest' }
-            })
-        );
-
-        // Empty project settings
-        fs.writeFileSync(path.join(projectDir, '.claude', 'settings.local.json'), '{}');
-
-        const result = configureSettings({ projectDir, pluginRoot, globalSettingsPath });
-
-        expect(result.success).toBe(true);
-        const settings = readSettings();
-        const statusLine = settings.statusLine as { command: string };
-        expect(statusLine.command).toContain('statusline-wrapper.ts');
-        expect(statusLine.command).toContain('bunx globalstatusline@latest');
-    });
-
-    it('creates .claude directory if it does not exist', () => {
-        const freshProjectDir = path.join(tmpDir, 'fresh-project');
-        fs.mkdirSync(freshProjectDir, { recursive: true });
+    it('creates parent directory if it does not exist', () => {
+        const nestedPath = path.join(tmpDir, 'nested', 'dir', 'settings.json');
 
         const result = configureSettings({
-            projectDir: freshProjectDir,
-            pluginRoot,
-            globalSettingsPath
+            targetSettingsPath: nestedPath,
+            pluginRoot
         });
 
         expect(result.success).toBe(true);
-        expect(fs.existsSync(path.join(freshProjectDir, '.claude', 'settings.local.json'))).toBe(
-            true
-        );
+        expect(fs.existsSync(nestedPath)).toBe(true);
     });
 
     it('preserves existing settings keys', () => {
         fs.writeFileSync(
-            path.join(projectDir, '.claude', 'settings.local.json'),
+            targetSettingsPath,
             JSON.stringify({
                 permissions: { allow: ['Bash(git:*)'] },
                 enabledPlugins: { 'carbon@cnaught-plugins': true }
             })
         );
 
-        configureSettings({ projectDir, pluginRoot, globalSettingsPath });
+        configureSettings({ targetSettingsPath, pluginRoot });
 
         const settings = readSettings();
         expect(settings.permissions).toEqual({ allow: ['Bash(git:*)'] });

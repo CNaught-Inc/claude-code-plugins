@@ -22,32 +22,36 @@ Ask the user whether they want to:
 ### Step 3: Ask about anonymous tracking
 
 Ask the user whether they want to enable anonymous carbon tracking with CNaught:
-- **Enable** — session metrics (token counts, CO2, energy, project path) will be synced to CNaught's API. No code, conversations, or personal information is shared.
-- **Disable** — all data stays local only (default)
+- **Enable** — session metrics (token counts, CO2, energy, project path) will be synced to CNaught's API. No code, conversations, or personal information is shared. (default)
+- **Disable** — all data stays local only
 
-If the user chose to enable, ask them for an optional display name. Let them know that if they skip this, a fun random name will be generated for them (e.g., "Curious Penguin", "Swift Falcon").
+If the user kept sync enabled (the default), ask them for an optional display name (DO NOT refer to a leaderboard as there is no such thing). Let them know that if they skip this, a fun random name will be generated for them (e.g., "Curious Penguin", "Swift Falcon").
 
 ### Step 4: Run the setup script
 
 Build the command with the appropriate flags based on the user's choices:
 - Add `--backfill` if the user chose to backfill historical sessions
-- Add `--enable-sync` if the user chose to enable anonymous tracking
+- Add `--disable-sync` if the user chose to disable anonymous tracking
 - Add `--user-name "Their Name"` if the user provided a custom display name
 - Add `--project-name "Their Project Name"` if the user provided a custom project name
 
 ```bash
-npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup.ts [--backfill] [--enable-sync] [--user-name "Name"] [--project-name "Project"]
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup.ts [--backfill] [--disable-sync] [--user-name "Name"] [--project-name "Project"]
 ```
 
 This will:
 - Initialize the local SQLite database
-- Configure `.claude/settings.local.json` (project-level) to enable the CO2 statusline
-- Migrate any old global statusline config from `~/.claude/settings.json`
+- Convert any project/local scope installation to user (global) scope
+- Configure `~/.claude/settings.json` to enable the CO2 statusline (active across all projects)
 - (If `--backfill`) Process historical transcript files into the database
-- (If `--enable-sync`) Generate a random identity and enable background sync to CNaught API
+- (Unless `--disable-sync`) Generate a random identity and enable background sync to CNaught API
 - (If `--project-name`) Store the custom project name in the database
 
-### Step 5: Verify setup
+### Step 5: Check for local statusline overrides
+
+After the setup script runs, check if the current project has a `.claude/settings.local.json` or `.claude/settings.json` file that contains its own `statusLine` entry. If it does, warn the user that this local statusline will override the global carbon statusline, and the CO2 indicator won't appear in this project. Offer to remove the `statusLine` key from the local file to fix it.
+
+### Step 6: Verify setup
 
 ```bash
 npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-report.ts
@@ -58,7 +62,7 @@ Show the output to the user and confirm that the database is initialized, the st
 ## Notes
 
 - You can run setup again at any time to reconfigure
-- The statusline shows real-time CO2 estimates in the Claude Code status bar
+- The statusline shows real-time CO2 estimates in the Claude Code status bar across all projects
 - Sessions are tracked automatically via hooks — no manual action needed
 - If sync is enabled, data syncs in the background after each response (non-blocking)
 - Use `/carbon:rename-project` to change the project name later

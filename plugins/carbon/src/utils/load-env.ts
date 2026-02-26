@@ -24,7 +24,9 @@ try {
         if (eqIndex === -1) continue;
         const key = trimmed.slice(0, eqIndex).trim();
         const value = trimmed.slice(eqIndex + 1).trim();
-        if (!(key in process.env)) {
+        // Bun exposes NODE_TLS_REJECT_UNAUTHORIZED as a key with value undefined,
+        // so check the value too, not just key presence
+        if (!process.env[key]) {
             process.env[key] = value;
         }
     }
