@@ -72,8 +72,13 @@ async function graphqlRequest<T>(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query, variables }),
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-        });
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            // Bun ignores runtime process.env.NODE_TLS_REJECT_UNAUTHORIZED,
+            // so pass it explicitly for local dev with self-signed certs
+            ...(process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' && {
+                tls: { rejectUnauthorized: false }
+            })
+        } as RequestInit);
 
         if (!response.ok) {
             logError(`API request failed: HTTP ${response.status}`);

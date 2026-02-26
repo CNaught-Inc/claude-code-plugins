@@ -9,7 +9,6 @@
 
 import '../utils/load-env';
 
-import * as fs from 'fs';
 import * as path from 'path';
 
 import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
@@ -35,7 +34,7 @@ import { findTranscriptsForProject, getSessionIdFromPath, parseSession } from '.
 import { syncUnsyncedSessions } from '../sync';
 import { generateMachineUserId } from '../utils/machine-id';
 import { logError } from '../utils/stdin';
-import { configureSettings } from './setup-helpers';
+import { configureSettings, convertToUserScope } from './setup-helpers';
 
 /**
  * Get the plugin root directory (two levels up from src/scripts/)
@@ -45,48 +44,6 @@ function getPluginRoot(): string {
     return path.resolve(__dirname, '..', '..');
 }
 
-/**
- * Migrate from the old global statusline setup:
- * - Remove statusLine from ~/.claude/settings.json if it references carbon
- * - Delete the old wrapper file ~/.claude/statusline-carbon.mjs
- */
-function migrateFromGlobalStatusline(): void {
-    const claudeDir = getClaudeDir();
-
-    // Remove global statusLine config if it's ours
-    const globalSettingsPath = path.join(claudeDir, 'settings.json');
-    try {
-        if (fs.existsSync(globalSettingsPath)) {
-            const content = fs.readFileSync(globalSettingsPath, 'utf-8');
-            const settings = JSON.parse(content);
-            const statusLine = settings.statusLine as Record<string, unknown> | undefined;
-            if (
-                statusLine &&
-                typeof statusLine === 'object' &&
-                typeof statusLine.command === 'string' &&
-                (statusLine.command.includes('statusline-carbon') ||
-                    statusLine.command.includes('carbon-statusline'))
-            ) {
-                delete settings.statusLine;
-                fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2));
-                console.log('  Removed old global statusline config from ~/.claude/settings.json');
-            }
-        }
-    } catch {
-        // Non-critical, ignore
-    }
-
-    // Delete old wrapper file
-    const wrapperPath = path.join(claudeDir, 'statusline-carbon.mjs');
-    try {
-        if (fs.existsSync(wrapperPath)) {
-            fs.unlinkSync(wrapperPath);
-            console.log('  Removed old wrapper file ~/.claude/statusline-carbon.mjs');
-        }
-    } catch {
-        // Non-critical, ignore
-    }
-}
 
 /**
  * Backfill historical sessions from transcript files on disk.
@@ -190,7 +147,7 @@ async function configureSyncTracking(
  */
 async function main(): Promise<void> {
     const shouldBackfill = process.argv.includes('--backfill');
-    const shouldEnableSync = process.argv.includes('--enable-sync');
+    const shouldEnableSync = !process.argv.includes('--disable-sync');
     const userNameIndex = process.argv.indexOf('--user-name');
     const customUserName = userNameIndex !== -1 ? process.argv[userNameIndex + 1] || null : null;
     const projectNameIndex = process.argv.indexOf('--project-name');
@@ -228,13 +185,13 @@ async function main(): Promise<void> {
         });
         console.log('');
 
-        // Step 2: Configure statusline
+        // Step 2: Configure statusline (global scope)
         console.log('Step 2: Configuring statusline...');
-        migrateFromGlobalStatusline();
+        const claudeDir = getClaudeDir();
+        convertToUserScope(claudeDir);
         const settingsResult = configureSettings({
-            projectDir: process.cwd(),
-            pluginRoot: getPluginRoot(),
-            globalSettingsPath: path.join(getClaudeDir(), 'settings.json')
+            targetSettingsPath: path.join(claudeDir, 'settings.json'),
+            pluginRoot: getPluginRoot()
         });
         console.log(`  ${settingsResult.message}\n`);
 

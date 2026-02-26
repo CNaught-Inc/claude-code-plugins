@@ -1,14 +1,14 @@
 /**
  * Carbon Uninstall Script
  *
- * Removes carbon tracking data for the current project:
- * 1. Deletes sessions matching the current project path from the database
- * 2. If no sessions remain, deletes the database (~/.claude/carbon-tracker.db)
+ * Removes carbon tracking data:
+ * - Without --project-path: deletes ALL sessions and wipes the database
+ * - With --project-path: deletes sessions for that project only (wipes DB if none remain)
  *
  * Statusline and settings cleanup is handled by the uninstall command (uninstall.md).
  *
  * Usage:
- *   carbon-uninstall.js --project-path /path/to/project
+ *   carbon-uninstall.js [--project-path /path/to/project]
  */
 
 import '../utils/load-env';
@@ -18,7 +18,7 @@ import * as fs from 'fs';
 import { deleteConfig, getDatabasePath, initializeDatabase, openDatabase } from '../data-store';
 import { resolveProjectIdentifier } from '../project-identifier';
 
-function deleteProjectSessions(projectPath: string): { deleted: number; remaining: number } {
+function deleteSessions(projectPath?: string): { deleted: number; remaining: number } {
     const dbPath = getDatabasePath();
     if (!fs.existsSync(dbPath)) {
         return { deleted: 0, remaining: 0 };
@@ -28,9 +28,18 @@ function deleteProjectSessions(projectPath: string): { deleted: number; remainin
     try {
         initializeDatabase(db);
 
-        const projectIdentifier = resolveProjectIdentifier(projectPath);
+        if (!projectPath) {
+            // Delete all sessions
+            const countRow = db.prepare('SELECT COUNT(*) as count FROM sessions').get() as {
+                count: number;
+            };
+            const total = countRow.count;
+            db.prepare('DELETE FROM sessions').run();
+            return { deleted: total, remaining: 0 };
+        }
 
         // Delete by project_identifier (new format) or legacy project_path formats
+        const projectIdentifier = resolveProjectIdentifier(projectPath);
         const encodedPath = projectPath.replace(/\//g, '-');
         const deleteResult = db
             .prepare('DELETE FROM sessions WHERE project_identifier = ? OR project_path = ? OR project_path = ?')
@@ -66,7 +75,7 @@ function deleteDatabase(): void {
 function main(): void {
     const args = process.argv.slice(2);
     const pathIndex = args.indexOf('--project-path');
-    const projectPath = pathIndex !== -1 ? args[pathIndex + 1] : null;
+    const projectPath = pathIndex !== -1 ? args[pathIndex + 1] : undefined;
 
     console.log('\n');
     console.log('========================================');
@@ -74,14 +83,14 @@ function main(): void {
     console.log('========================================');
     console.log('\n');
 
-    if (!projectPath) {
-        console.log('  Error: --project-path is required');
-        process.exit(1);
+    if (projectPath) {
+        console.log(`  Removing sessions for: ${projectPath}\n`);
+    } else {
+        console.log('  Removing all sessions...\n');
     }
 
-    console.log(`  Removing sessions for: ${projectPath}\n`);
-    const { deleted, remaining } = deleteProjectSessions(projectPath);
-    console.log(`  Deleted ${deleted} session(s) for this project`);
+    const { deleted, remaining } = deleteSessions(projectPath);
+    console.log(`  Deleted ${deleted} session(s)`);
 
     if (remaining === 0) {
         // Clean up sync config before deleting the database

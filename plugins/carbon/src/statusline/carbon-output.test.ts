@@ -129,7 +129,6 @@ describe('getCarbonOutput', () => {
         });
 
         expect(result).toContain('Climate Impact:');
-        expect(result).toContain('test_project_abcd1234');
     });
 
     it('handles null current_usage', () => {

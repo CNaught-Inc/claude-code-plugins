@@ -8,6 +8,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+const PLUGIN_ID = 'carbon@cnaught-plugins';
+
 /**
  * Check if a statusLine command belongs to this plugin.
  */
@@ -19,11 +21,194 @@ export function isCarbonStatusLine(command: string): boolean {
     );
 }
 
+// -- installed_plugins.json helpers --
+
+export interface InstalledPluginEntry {
+    scope: 'user' | 'project' | 'local' | 'managed';
+    installPath: string;
+    version: string;
+    installedAt: string;
+    lastUpdated: string;
+    projectPath?: string;
+    gitCommitSha?: string;
+}
+
+/**
+ * Read all carbon plugin entries from ~/.claude/plugins/installed_plugins.json.
+ */
+export function getInstalledPluginEntries(claudeDir: string): InstalledPluginEntry[] {
+    const filePath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+    try {
+        if (!fs.existsSync(filePath)) return [];
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(content) as { plugins?: Record<string, InstalledPluginEntry[]> };
+        return data.plugins?.[PLUGIN_ID] ?? [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Remove the carbon statusline from a settings file.
+ * If _carbonOriginalStatusLine is present, restores it as the statusLine.
+ * Also removes carbon from enabledPlugins.
+ */
+function cleanupSettingsFile(settingsPath: string): void {
+    try {
+        if (!fs.existsSync(settingsPath)) return;
+        const content = fs.readFileSync(settingsPath, 'utf-8');
+        const settings = JSON.parse(content) as Record<string, unknown>;
+        let changed = false;
+
+        // Restore original statusline or remove carbon statusline
+        const statusLine = settings.statusLine as Record<string, unknown> | undefined;
+        const savedOriginal = settings._carbonOriginalStatusLine as
+            | Record<string, unknown>
+            | undefined;
+
+        if (savedOriginal && typeof savedOriginal === 'object') {
+            settings.statusLine = savedOriginal;
+            delete settings._carbonOriginalStatusLine;
+            changed = true;
+        } else if (
+            statusLine &&
+            typeof statusLine === 'object' &&
+            typeof statusLine.command === 'string' &&
+            isCarbonStatusLine(statusLine.command)
+        ) {
+            delete settings.statusLine;
+            delete settings._carbonOriginalStatusLine;
+            changed = true;
+        }
+
+        // Remove from enabledPlugins
+        const enabledPlugins = settings.enabledPlugins as Record<string, unknown> | undefined;
+        if (enabledPlugins && PLUGIN_ID in enabledPlugins) {
+            delete enabledPlugins[PLUGIN_ID];
+            if (Object.keys(enabledPlugins).length === 0) {
+                delete settings.enabledPlugins;
+            }
+            changed = true;
+        }
+
+        if (changed) {
+            fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        }
+    } catch {
+        // Non-critical, ignore
+    }
+}
+
+/**
+ * Convert the plugin installation to user (global) scope.
+ *
+ * - Cleans up carbon statusline + enabledPlugins from all project/local settings files
+ * - Ensures enabledPlugins in ~/.claude/settings.json has the carbon plugin
+ * - Updates installed_plugins.json to a single user-scope entry
+ */
+export function convertToUserScope(claudeDir: string): void {
+    const entries = getInstalledPluginEntries(claudeDir);
+    if (entries.length === 0) return;
+
+    // Clean up project/local scope settings files
+    for (const entry of entries) {
+        if ((entry.scope === 'project' || entry.scope === 'local') && entry.projectPath) {
+            cleanupSettingsFile(path.join(entry.projectPath, '.claude', 'settings.local.json'));
+        }
+    }
+
+    // Ensure enabledPlugins in global settings.json
+    const globalSettingsPath = path.join(claudeDir, 'settings.json');
+    try {
+        let settings: Record<string, unknown> = {};
+        if (fs.existsSync(globalSettingsPath)) {
+            settings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf-8'));
+        }
+        const enabledPlugins = (settings.enabledPlugins as Record<string, unknown>) ?? {};
+        if (!(PLUGIN_ID in enabledPlugins)) {
+            enabledPlugins[PLUGIN_ID] = true;
+            settings.enabledPlugins = enabledPlugins;
+            fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2));
+        }
+    } catch {
+        // Non-critical
+    }
+
+    // Update installed_plugins.json to a single user-scope entry
+    const installedPluginsPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+    try {
+        if (!fs.existsSync(installedPluginsPath)) return;
+        const content = fs.readFileSync(installedPluginsPath, 'utf-8');
+        const data = JSON.parse(content) as { version?: number; plugins: Record<string, InstalledPluginEntry[]> };
+
+        const existingEntries = data.plugins[PLUGIN_ID] ?? [];
+        const userEntry = existingEntries.find((e) => e.scope === 'user');
+
+        if (userEntry) {
+            // Already has a user-scope entry — keep only that one
+            data.plugins[PLUGIN_ID] = [userEntry];
+        } else if (existingEntries.length > 0) {
+            // Convert the first entry to user scope
+            const base = existingEntries[0];
+            data.plugins[PLUGIN_ID] = [
+                {
+                    scope: 'user',
+                    installPath: base.installPath,
+                    version: base.version,
+                    installedAt: base.installedAt,
+                    lastUpdated: new Date().toISOString(),
+                    ...(base.gitCommitSha ? { gitCommitSha: base.gitCommitSha } : {})
+                }
+            ];
+        }
+
+        fs.writeFileSync(installedPluginsPath, JSON.stringify(data, null, 2));
+    } catch {
+        // Non-critical
+    }
+}
+
+/**
+ * Clean up all carbon plugin traces during uninstall.
+ *
+ * - Removes statusline + enabledPlugins from all known settings files
+ * - Removes all entries from installed_plugins.json
+ */
+export function cleanupAllInstallations(claudeDir: string): void {
+    const entries = getInstalledPluginEntries(claudeDir);
+
+    // Clean up project/local scope settings files
+    for (const entry of entries) {
+        if (entry.projectPath) {
+            cleanupSettingsFile(path.join(entry.projectPath, '.claude', 'settings.local.json'));
+        }
+    }
+
+    // Clean up global settings
+    cleanupSettingsFile(path.join(claudeDir, 'settings.json'));
+    cleanupSettingsFile(path.join(claudeDir, 'settings.local.json'));
+
+    // Remove from installed_plugins.json
+    const installedPluginsPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+    try {
+        if (!fs.existsSync(installedPluginsPath)) return;
+        const content = fs.readFileSync(installedPluginsPath, 'utf-8');
+        const data = JSON.parse(content) as { plugins: Record<string, unknown> };
+        if (PLUGIN_ID in data.plugins) {
+            delete data.plugins[PLUGIN_ID];
+            fs.writeFileSync(installedPluginsPath, JSON.stringify(data, null, 2));
+        }
+    } catch {
+        // Non-critical
+    }
+}
+
+// -- configureSettings --
+
 export interface ConfigureSettingsOptions {
-    projectDir: string;
+    /** The settings file to write the statusline to (e.g., ~/.claude/settings.json) */
+    targetSettingsPath: string;
     pluginRoot: string;
-    /** Path to global settings.json. If omitted, global settings are not checked. */
-    globalSettingsPath?: string;
 }
 
 export interface ConfigureSettingsResult {
@@ -33,14 +218,13 @@ export interface ConfigureSettingsResult {
 }
 
 /**
- * Configure project-level .claude/settings.local.json with the statusline command.
+ * Configure the statusline command in the target settings file.
  *
  * If an existing non-carbon statusline is found, it is preserved and wrapped
  * so both statuslines run together (original output | carbon output).
  */
 export function configureSettings(opts: ConfigureSettingsOptions): ConfigureSettingsResult {
-    const claudeProjectDir = path.join(opts.projectDir, '.claude');
-    const settingsPath = path.join(claudeProjectDir, 'settings.local.json');
+    const settingsPath = opts.targetSettingsPath;
     const standaloneScript = path.join(
         opts.pluginRoot,
         'src',
@@ -72,42 +256,7 @@ export function configureSettings(opts: ConfigureSettingsOptions): ConfigureSett
         } else {
             existingStatusLine = settings.statusLine as Record<string, unknown> | undefined;
         }
-        if (!existingStatusLine || typeof existingStatusLine !== 'object') {
-            // Check project-level settings.json (higher priority than global)
-            const projectSettingsPath = path.join(claudeProjectDir, 'settings.json');
-            try {
-                if (fs.existsSync(projectSettingsPath)) {
-                    const projectContent = fs.readFileSync(projectSettingsPath, 'utf-8');
-                    const projectSettings = JSON.parse(projectContent);
-                    if (
-                        projectSettings.statusLine &&
-                        typeof projectSettings.statusLine === 'object'
-                    ) {
-                        existingStatusLine = projectSettings.statusLine as Record<string, unknown>;
-                    }
-                }
-            } catch {
-                // Non-critical, ignore
-            }
-        }
-        if (!existingStatusLine || typeof existingStatusLine !== 'object') {
-            // Check global settings (lowest priority in cascade)
-            const globalSettingsPath = opts.globalSettingsPath;
-            try {
-                if (globalSettingsPath && fs.existsSync(globalSettingsPath)) {
-                    const globalContent = fs.readFileSync(globalSettingsPath, 'utf-8');
-                    const globalSettings = JSON.parse(globalContent);
-                    if (
-                        globalSettings.statusLine &&
-                        typeof globalSettings.statusLine === 'object'
-                    ) {
-                        existingStatusLine = globalSettings.statusLine as Record<string, unknown>;
-                    }
-                }
-            } catch {
-                // Non-critical, ignore
-            }
-        }
+
         const hasExternalStatusLine =
             existingStatusLine &&
             typeof existingStatusLine === 'object' &&
@@ -130,8 +279,9 @@ export function configureSettings(opts: ConfigureSettingsOptions): ConfigureSett
             };
         }
 
-        if (!fs.existsSync(claudeProjectDir)) {
-            fs.mkdirSync(claudeProjectDir, { recursive: true });
+        const settingsDir = path.dirname(settingsPath);
+        if (!fs.existsSync(settingsDir)) {
+            fs.mkdirSync(settingsDir, { recursive: true });
         }
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
         return { success: true, message: `Settings configured at ${settingsPath}`, settings };

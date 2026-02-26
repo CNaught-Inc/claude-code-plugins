@@ -6,7 +6,6 @@
 
 import '../utils/load-env';
 
-import { getDashboardUrl } from '../api-client';
 import { formatCO2, formatEnergy } from '../carbon-calculator';
 import {
     getAggregateStats,
@@ -248,13 +247,10 @@ async function main(): Promise<void> {
 
         // ── Sync info ─────────────────────────────────────────
         if (syncInfo.enabled) {
-            console.log(`${c.bold}  Sync${c.reset}`);
+            console.log(`${c.bold}  Anonymous Sync${c.reset}`);
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
             console.log(`    ${c.dim}Name:${c.reset}          ${syncInfo.userName || 'Unknown'}`);
-            if (syncInfo.userId) {
-                console.log(`    ${c.dim}Dashboard:${c.reset}     ${getDashboardUrl(syncInfo.userId)}`);
-            }
             if (syncInfo.pendingCount > 0) {
                 console.log(`    ${c.dim}Pending sync:${c.reset}  ${syncInfo.pendingCount} session(s)`);
             }

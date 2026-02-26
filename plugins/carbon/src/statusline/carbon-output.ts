@@ -123,8 +123,8 @@ export function getCarbonOutput(input: StatuslineInput): string {
         }
     }
 
-    const totalCO2 = getTotalCO2FromDb(projectIdentifier);
-    const totalEnergyWh = getTotalEnergyFromDb(projectIdentifier);
+    const totalCO2 = getTotalCO2FromDb();
+    const totalEnergyWh = getTotalEnergyFromDb();
 
     if (sessionCO2 === 0 && (totalCO2 === null || totalCO2 === 0)) {
         return '';
@@ -140,12 +140,6 @@ export function getCarbonOutput(input: StatuslineInput): string {
     const totalKwh = (effectiveEnergyWh / 1000).toFixed(2);
     const energyStr = `Energy ${totalKwh}kWh`;
 
-    let projectSuffix = '';
-    if (projectIdentifier && !projectIdentifier.startsWith('local_')) {
-        const purple = '\x1b[38;5;96m';
-        projectSuffix = ` \u00b7 ${purple}${projectIdentifier}${reset}`;
-    }
-
     let syncSuffix = '';
     const syncInfo = getSyncInfo();
     if (syncInfo.enabled && syncInfo.userName && syncInfo.userId) {
@@ -160,5 +154,5 @@ export function getCarbonOutput(input: StatuslineInput): string {
         }
     }
 
-    return `Climate Impact: ${co2Str} \u00b7 ${energyStr}${projectSuffix}${syncSuffix}`;
+    return `Climate Impact: ${co2Str} \u00b7 ${energyStr}${syncSuffix}`;
 }
