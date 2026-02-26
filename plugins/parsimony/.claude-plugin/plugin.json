@@ -1,0 +1,8 @@
+{
+  "name": "parsimony",
+  "version": "1.0.0",
+  "description": "Token efficiency skill that reduces controllable token usage by ~30% and speeds up responses by ~48% without sacrificing output quality",
+  "author": {
+    "name": "CNaught"
+  }
+}
