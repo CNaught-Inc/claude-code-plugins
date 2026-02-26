@@ -104,6 +104,13 @@ async function graphqlRequest<T>(
 }
 
 /**
+ * Convert a modelsUsed record to the API's ClaudeCodeModelUsage array format.
+ */
+function modelsUsedToArray(modelsUsed: Record<string, number>) {
+    return Object.entries(modelsUsed).map(([modelId, tokenCount]) => ({ modelId, tokenCount }));
+}
+
+/**
  * Build the variables for a single session upsert mutation.
  */
 function sessionToInput(config: SyncConfig, session: SessionRecord) {
@@ -119,7 +126,8 @@ function sessionToInput(config: SyncConfig, session: SessionRecord) {
         totalCacheReadTokens: session.cacheReadTokens,
         energyWh: session.energyWh,
         startedAt: session.createdAt.toISOString(),
-        primaryModel: session.primaryModel
+        primaryModel: session.primaryModel,
+        modelsUsed: modelsUsedToArray(session.modelsUsed)
     };
 }
 
@@ -184,7 +192,8 @@ export async function upsertSessions(
                 totalCacheReadTokens: s.cacheReadTokens,
                 energyWh: s.energyWh,
                 startedAt: s.createdAt.toISOString(),
-                primaryModel: s.primaryModel
+                primaryModel: s.primaryModel,
+                modelsUsed: modelsUsedToArray(s.modelsUsed)
             }))
         }
     });

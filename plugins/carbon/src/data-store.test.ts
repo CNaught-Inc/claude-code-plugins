@@ -48,6 +48,7 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
         energyWh: 0.05,
         co2Grams: 0.015,
         primaryModel: 'claude-sonnet-4-20250514',
+        modelsUsed: { 'claude-sonnet-4-20250514': 1 },
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-01T01:00:00Z'),
         ...overrides

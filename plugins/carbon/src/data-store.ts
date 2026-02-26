@@ -29,6 +29,7 @@ export interface SessionRecord {
     energyWh: number;
     co2Grams: number;
     primaryModel: string;
+    modelsUsed: Record<string, number>;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -202,6 +203,15 @@ export const MIGRATIONS: Migration[] = [
                 )
             `);
         }
+    },
+    {
+        version: 4,
+        description: 'Add models_used column for tracking all models in a session',
+        up: (db) => {
+            if (!columnExists(db, 'sessions', 'models_used')) {
+                db.exec("ALTER TABLE sessions ADD COLUMN models_used TEXT NOT NULL DEFAULT '{}'");
+            }
+        }
     }
 ];
 
@@ -277,12 +287,12 @@ export function upsertSession(db: Database, session: SessionRecord): void {
         INSERT INTO sessions (
             session_id, project_path, project_identifier, input_tokens, output_tokens,
             cache_creation_tokens, cache_read_tokens, total_tokens,
-            energy_wh, co2_grams, primary_model, created_at, updated_at,
+            energy_wh, co2_grams, primary_model, models_used, created_at, updated_at,
             needs_sync
         ) VALUES (
             $sessionId, $projectPath, $projectIdentifier, $inputTokens, $outputTokens,
             $cacheCreationTokens, $cacheReadTokens, $totalTokens,
-            $energyWh, $co2Grams, $primaryModel, $createdAt, $updatedAt,
+            $energyWh, $co2Grams, $primaryModel, $modelsUsed, $createdAt, $updatedAt,
             1
         )
         ON CONFLICT(session_id) DO UPDATE SET
@@ -296,6 +306,7 @@ export function upsertSession(db: Database, session: SessionRecord): void {
             energy_wh = excluded.energy_wh,
             co2_grams = excluded.co2_grams,
             primary_model = excluded.primary_model,
+            models_used = excluded.models_used,
             updated_at = excluded.updated_at,
             needs_sync = 1
     `);
@@ -312,6 +323,7 @@ export function upsertSession(db: Database, session: SessionRecord): void {
         $energyWh: session.energyWh,
         $co2Grams: session.co2Grams,
         $primaryModel: session.primaryModel,
+        $modelsUsed: JSON.stringify(session.modelsUsed),
         $createdAt: session.createdAt.toISOString(),
         $updatedAt: session.updatedAt.toISOString()
     });
@@ -543,6 +555,15 @@ export function markSessionsSynced(db: Database, sessionIds: string[]): void {
  * Convert a database row to a SessionRecord
  */
 function rowToSession(row: Record<string, unknown>): SessionRecord {
+    let modelsUsed: Record<string, number> = {};
+    try {
+        if (typeof row.models_used === 'string' && row.models_used) {
+            modelsUsed = JSON.parse(row.models_used);
+        }
+    } catch {
+        // Fall back to empty object for malformed JSON
+    }
+
     return {
         sessionId: row.session_id as string,
         projectPath: row.project_path as string,
@@ -555,6 +576,7 @@ function rowToSession(row: Record<string, unknown>): SessionRecord {
         energyWh: Number(row.energy_wh),
         co2Grams: Number(row.co2_grams),
         primaryModel: row.primary_model as string,
+        modelsUsed,
         createdAt: new Date(row.created_at as string),
         updatedAt: new Date(row.updated_at as string)
     };
