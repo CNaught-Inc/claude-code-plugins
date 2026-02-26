@@ -10,6 +10,12 @@ Track carbon emissions from your Claude Code usage. See real-time CO2 estimates 
 
 See the [Carbon Tracker README](plugins/carbon/README.md) for installation, setup, commands, statusline, and more.
 
+### [Parsimony](plugins/parsimony/)
+
+Token efficiency skill that reduces controllable token usage by ~30% and speeds up responses by ~48% — without sacrificing output quality. Uses input reduction, concise output, and smart model selection.
+
+See the [Parsimony README](plugins/parsimony/README.md) for installation, modes, benchmarks, and more.
+
 ## Development
 
 ### Prerequisites
@@ -38,6 +44,9 @@ bun run lint        # Lint all plugins
 plugins/
   carbon/           # Carbon tracker plugin
     src/            # Source code (run directly by Bun)
+  parsimony/        # Token efficiency plugin
+    skills/         # Skill definitions
+    commands/       # Slash commands (/token-mode, /token-report)
 ```
 
 ### Releasing
