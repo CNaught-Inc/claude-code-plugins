@@ -1,18 +1,13 @@
 /**
  * Carbon Report Script
  *
- * Generates a carbon emissions report including:
- * - All-time project statistics
- * - 7-day summary
- * - Daily breakdown with chart
- * - Relatable equivalents
- * - Project breakdown
+ * Generates a visual climate impact report with terminal graphs.
  */
 
 import '../utils/load-env';
 
 import { getDashboardUrl } from '../api-client';
-import { calculateEquivalents, formatCO2, formatEnergy } from '../carbon-calculator';
+import { formatCO2, formatEnergy } from '../carbon-calculator';
 import {
     getAggregateStats,
     getConfig,
@@ -25,47 +20,125 @@ import {
 import { resolveProjectIdentifier } from '../project-identifier';
 import { logError } from '../utils/stdin';
 
-/**
- * Format large numbers with commas
- */
-function formatNumber(num: number): string {
+// ── ANSI helpers ──────────────────────────────────────────────
+
+const c = {
+    reset: '\x1b[0m',
+    bold: '\x1b[1m',
+    dim: '\x1b[2m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+    red: '\x1b[31m',
+    gray: '\x1b[38;5;242m',
+};
+
+// ── Formatting helpers ────────────────────────────────────────
+
+function fmt(num: number): string {
     return num.toLocaleString();
 }
 
-/**
- * Generate a simple ASCII bar chart
- */
-function generateBar(value: number, maxValue: number, maxWidth: number = 20): string {
-    if (maxValue === 0) return '';
-    const width = Math.round((value / maxValue) * maxWidth);
-    return '#'.repeat(Math.max(1, width));
+function kg(grams: number): string {
+    return (grams / 1000).toFixed(2);
 }
 
-/**
- * Format a day name from date string
- */
+function kwh(wh: number): string {
+    return (wh / 1000).toFixed(2);
+}
+
+function pct(value: number, total: number): string {
+    if (total === 0) return '0%';
+    return `${Math.round((value / total) * 100)}%`;
+}
+
 function formatDayName(dateStr: string): string {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
-async function main(): Promise<void> {
-    console.log('\n');
-    console.log('\n');
-    console.log('========================================');
-    console.log('  CNaught Carbon Emissions Report      ');
-    console.log('========================================');
-    console.log('\n');
+// ── Graph builders ────────────────────────────────────────────
 
+function progressBar(value: number, maxValue: number, width: number = 20, color: string = c.green): string {
+    if (maxValue === 0) return `${c.gray}[${'·'.repeat(width)}]${c.reset}`;
+    const filled = Math.round((value / maxValue) * width);
+    const empty = width - filled;
+    return `${c.gray}[${c.reset}${color}${'■'.repeat(filled)}${c.gray}${'·'.repeat(empty)}]${c.reset}`;
+}
+
+// ── Model stats query ─────────────────────────────────────────
+
+interface ModelStats {
+    model: string;
+    sessions: number;
+    co2Grams: number;
+    energyWh: number;
+    tokens: number;
+}
+
+function getModelStats(projectIdentifier?: string): ModelStats[] {
+    return withDatabase((db) => {
+        const projectFilter = projectIdentifier ? 'WHERE project_identifier = ?' : '';
+        const stmt = db.prepare(`
+            SELECT
+                primary_model as model,
+                COUNT(*) as sessions,
+                COALESCE(SUM(co2_grams), 0) as co2_grams,
+                COALESCE(SUM(energy_wh), 0) as energy_wh,
+                COALESCE(SUM(total_tokens), 0) as tokens
+            FROM sessions
+            ${projectFilter}
+            GROUP BY primary_model
+            ORDER BY co2_grams DESC
+        `);
+
+        const rows = (projectIdentifier ? stmt.all(projectIdentifier) : stmt.all()) as Record<string, unknown>[];
+        return rows.map((row) => ({
+            model: row.model as string,
+            sessions: Number(row.sessions),
+            co2Grams: Number(row.co2_grams),
+            energyWh: Number(row.energy_wh),
+            tokens: Number(row.tokens),
+        }));
+    });
+}
+
+// ── Friendly model name ───────────────────────────────────────
+
+function friendlyModelName(modelId: string): string {
+    const map: Record<string, string> = {
+        'claude-3-haiku-20240307': 'Claude 3 Haiku',
+        'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku',
+        'claude-haiku-4-5-20251001': 'Claude 4.5 Haiku',
+        'claude-sonnet-4-20250514': 'Claude Sonnet 4',
+        'claude-sonnet-4-5-20250929': 'Claude 4.5 Sonnet',
+        'claude-opus-4-20250514': 'Claude Opus 4',
+        'claude-opus-4-1-20250805': 'Claude Opus 4.1',
+    };
+    if (map[modelId]) return map[modelId];
+    // Try to extract a readable name from the model ID
+    const lower = modelId.toLowerCase();
+    if (lower.includes('opus')) return 'Claude Opus';
+    if (lower.includes('sonnet')) return 'Claude Sonnet';
+    if (lower.includes('haiku')) return 'Claude Haiku';
+    return modelId;
+}
+
+// ── Main report ───────────────────────────────────────────────
+
+async function main(): Promise<void> {
     try {
         const projectId = resolveProjectIdentifier(process.cwd());
 
-        const { allTimeStats, dailyStats, projectStats, syncInfo } = withDatabase((db) => {
+        const { allTimeStats, dailyStats, projectStats, modelStats, syncInfo } = withDatabase((db) => {
             const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
             return {
                 allTimeStats: getAggregateStats(db, projectId),
                 dailyStats: getDailyStats(db, 7, projectId),
-                projectStats: getProjectStats(db, 7),
+                projectStats: getProjectStats(db, 30),
+                modelStats: getModelStats(projectId),
                 syncInfo: {
                     enabled: syncEnabled,
                     userName: syncEnabled ? getConfig(db, 'claude_code_user_name') : null,
@@ -75,158 +148,136 @@ async function main(): Promise<void> {
             };
         });
 
-        // Project info
-        console.log(`Project: ${projectId}`);
+        const totalCO2 = allTimeStats.totalCO2Grams;
+        const totalEnergy = allTimeStats.totalEnergyWh;
+
+        // ── Header ────────────────────────────────────────────
+        console.log('');
+        console.log(`${c.bold}  ╔══════════════════════════════════════════════════╗${c.reset}`);
+        console.log(`${c.bold}  ║           Climate Impact Report                 ║${c.reset}`);
+        console.log(`${c.bold}  ╚══════════════════════════════════════════════════╝${c.reset}`);
+        console.log(`${c.dim}  Project: ${projectId}${c.reset}`);
         console.log('');
 
-        // All-time section
-        console.log('All-Time Project Statistics:');
-        console.log('----------------------------------------');
-        console.log(`  Sessions tracked:    ${formatNumber(allTimeStats.totalSessions)}`);
-        console.log(`  Total tokens:        ${formatNumber(allTimeStats.totalTokens)}`);
-        console.log(`    Input:             ${formatNumber(allTimeStats.totalInputTokens)}`);
-        console.log(`    Output:            ${formatNumber(allTimeStats.totalOutputTokens)}`);
-        console.log(
-            `    Cache creation:    ${formatNumber(allTimeStats.totalCacheCreationTokens)}`
-        );
-        console.log(`    Cache read:        ${formatNumber(allTimeStats.totalCacheReadTokens)}`);
-        console.log(`  Energy consumed:     ${formatEnergy(allTimeStats.totalEnergyWh)}`);
-        console.log(`  CO2 emitted:         ${formatCO2(allTimeStats.totalCO2Grams)}`);
+        // ── Big numbers ───────────────────────────────────────
+        console.log(`${c.bold}  All-Time Totals${c.reset}`);
+        console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
+        console.log('');
+        console.log(`    ${c.bold}${c.yellow}CO₂${c.reset}    ${c.bold}${kg(totalCO2)}${c.reset} kg    ${c.dim}(${formatCO2(totalCO2)})${c.reset}`);
+        console.log(`    ${c.bold}${c.cyan}Energy${c.reset} ${c.bold}${kwh(totalEnergy)}${c.reset} kWh   ${c.dim}(${formatEnergy(totalEnergy)})${c.reset}`);
+        console.log(`    ${c.dim}Sessions: ${fmt(allTimeStats.totalSessions)} · Tokens: ${fmt(allTimeStats.totalTokens)}${c.reset}`);
         console.log('');
 
-        // Calculate 7-day totals
-        const totals = dailyStats.reduce(
-            (acc, day) => ({
-                sessions: acc.sessions + day.sessions,
-                tokens: acc.tokens + day.tokens,
-                energyWh: acc.energyWh + day.energyWh,
-                co2Grams: acc.co2Grams + day.co2Grams
-            }),
-            { sessions: 0, tokens: 0, energyWh: 0, co2Grams: 0 }
-        );
+        // ── Real-world equivalents ────────────────────────────
+        if (totalCO2 > 0) {
+            console.log(`${c.bold}  What Does This Mean?${c.reset}`);
+            console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
+            console.log('');
 
-        // 7-day summary section
-        console.log('Last 7 Days:');
-        console.log('----------------------------------------');
-        console.log(`  Sessions:      ${formatNumber(totals.sessions)}`);
-        console.log(`  Tokens:        ${formatNumber(totals.tokens)}`);
-        console.log(`  Energy:        ${formatEnergy(totals.energyWh)}`);
-        console.log(`  CO2:           ${formatCO2(totals.co2Grams)}`);
-        console.log('');
+            // Miles driven: ~404g CO2/mile (EPA average passenger vehicle)
+            const milesDriven = totalCO2 / 404;
+            // Daily home energy: US average household ~17,000 lbs CO2/year = ~21,127g/day
+            const daysHomeEnergy = totalCO2 / 21127;
 
-        // Equivalents section
-        if (totals.co2Grams > 0) {
-            const equivalents = calculateEquivalents(totals.co2Grams);
-
-            console.log('Equivalents:');
-            console.log('----------------------------------------');
-            console.log('  This is roughly equivalent to:');
-
-            if (equivalents.kmDriven >= 0.01) {
-                console.log(`    - Driving ${equivalents.kmDriven.toFixed(2)} km in a car`);
-            }
-            if (equivalents.phoneCharges >= 0.1) {
-                console.log(
-                    `    - Charging your phone ${equivalents.phoneCharges.toFixed(1)} times`
-                );
-            }
-            if (equivalents.ledLightHours >= 1) {
-                console.log(
-                    `    - Running an LED bulb for ${Math.round(equivalents.ledLightHours)} minutes`
-                );
-            }
-            if (equivalents.googleSearches >= 1) {
-                console.log(`    - ${Math.round(equivalents.googleSearches)} Google searches`);
-            }
-
+            console.log(`    🚗  Miles driven      ${c.bold}${milesDriven.toFixed(3)} mi${c.reset}`);
+            console.log(`    🏠  Home energy        ${c.bold}${daysHomeEnergy.toFixed(4)} days${c.reset}`);
             console.log('');
         }
 
-        // Daily breakdown
+        // ── Usage by model ────────────────────────────────────
+        if (modelStats.length > 0) {
+            const totalModelCO2 = modelStats.reduce((sum, m) => sum + m.co2Grams, 0);
+
+            console.log(`${c.bold}  Usage by Model${c.reset}`);
+            console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
+            console.log('');
+
+            const modelColors = [c.yellow, c.cyan, c.green, c.magenta, c.blue];
+            for (let i = 0; i < modelStats.length; i++) {
+                const m = modelStats[i];
+                const color = modelColors[i % modelColors.length];
+                const name = friendlyModelName(m.model).padEnd(22);
+                const bar = progressBar(m.co2Grams, totalModelCO2, 15, color);
+                const co2 = `${kg(m.co2Grams)}kg`.padStart(8);
+                console.log(`    ${bar} ${color}${name}${c.reset} ${c.bold}${co2}${c.reset}  ${c.dim}${m.sessions} sessions · ${pct(m.co2Grams, totalModelCO2)}${c.reset}`);
+            }
+            console.log('');
+        }
+
+        // ── Daily breakdown ───────────────────────────────────
         if (dailyStats.length > 0) {
             const maxCO2 = Math.max(...dailyStats.map((d) => d.co2Grams));
 
-            console.log('Daily Breakdown:');
-            console.log('----------------------------------------');
+            console.log(`${c.bold}  Daily Breakdown (7 Days)${c.reset}`);
+            console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
+            console.log('');
 
             for (const day of dailyStats) {
                 const dayName = formatDayName(day.date).padEnd(4);
                 const co2Str = formatCO2(day.co2Grams).padStart(8);
-                const bar = generateBar(day.co2Grams, maxCO2);
-                console.log(`  ${dayName} ${co2Str}  ${bar}`);
+                const bar = progressBar(day.co2Grams, maxCO2, 15, c.green);
+                console.log(`    ${bar} ${c.dim}${dayName}${c.reset} ${c.bold}${co2Str}${c.reset}`);
             }
-
-            console.log('');
-        } else {
-            console.log('Daily Breakdown:');
-            console.log('----------------------------------------');
-            console.log('  No data for the last 7 days');
             console.log('');
         }
 
-        // All projects breakdown (for comparison)
-        if (projectStats.length > 0) {
+        // ── Project breakdown ─────────────────────────────────
+        if (projectStats.length > 1) {
             const totalProjectCO2 = projectStats.reduce((sum, p) => sum + p.co2Grams, 0);
 
-            console.log('All Projects:');
-            console.log('----------------------------------------');
+            console.log(`${c.bold}  Projects (Last 30 Days)${c.reset}`);
+            console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
+            console.log('');
 
-            // Show top 5 projects
-            const topProjects = projectStats.slice(0, 5);
-
-            for (const project of topProjects) {
-                const name = project.projectPath.padEnd(25);
-                const co2Str = formatCO2(project.co2Grams).padStart(8);
-                const percent =
-                    totalProjectCO2 > 0
-                        ? `(${Math.round((project.co2Grams / totalProjectCO2) * 100)}%)`
-                        : '';
-                console.log(`  ${name} ${co2Str} ${percent}`);
+            const projectColors = [c.green, c.cyan, c.yellow, c.magenta, c.blue];
+            for (let i = 0; i < Math.min(projectStats.length, 5); i++) {
+                const p = projectStats[i];
+                const color = projectColors[i % projectColors.length];
+                const name = p.projectPath.padEnd(22);
+                const bar = progressBar(p.co2Grams, totalProjectCO2, 15, color);
+                console.log(`    ${bar} ${color}${name}${c.reset} ${c.bold}${kg(p.co2Grams).padStart(6)}kg${c.reset}  ${c.dim}${pct(p.co2Grams, totalProjectCO2)}${c.reset}`);
             }
 
             if (projectStats.length > 5) {
                 const otherCO2 = projectStats.slice(5).reduce((sum, p) => sum + p.co2Grams, 0);
-                const otherPercent =
-                    totalProjectCO2 > 0
-                        ? `(${Math.round((otherCO2 / totalProjectCO2) * 100)}%)`
-                        : '';
-                console.log(
-                    `  ${'other'.padEnd(25)} ${formatCO2(otherCO2).padStart(8)} ${otherPercent}`
-                );
+                const bar = progressBar(otherCO2, totalProjectCO2, 15, c.dim);
+                console.log(`    ${bar} ${c.dim}${'other'.padEnd(22)}${c.reset} ${c.bold}${kg(otherCO2).padStart(6)}kg${c.reset}  ${c.dim}${pct(otherCO2, totalProjectCO2)}${c.reset}`);
             }
-
             console.log('');
         }
 
-        // Sync info
-        console.log('Sync:');
-        console.log('----------------------------------------');
+        // ── Sync info ─────────────────────────────────────────
         if (syncInfo.enabled) {
-            console.log(`  Status:          enabled`);
-            console.log(`  Name:            ${syncInfo.userName || 'Unknown'}`);
-            console.log(`  User ID:         ${syncInfo.userId || 'Unknown'}`);
+            console.log(`${c.bold}  Sync${c.reset}`);
+            console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
+            console.log('');
+            console.log(`    ${c.dim}Name:${c.reset}          ${syncInfo.userName || 'Unknown'}`);
             if (syncInfo.userId) {
-                console.log(`  Dashboard:       ${getDashboardUrl(syncInfo.userId)}`);
+                console.log(`    ${c.dim}Dashboard:${c.reset}     ${getDashboardUrl(syncInfo.userId)}`);
             }
-            console.log(`  Pending sync:    ${syncInfo.pendingCount} session(s)`);
-        } else {
-            console.log('  Status:          disabled');
+            if (syncInfo.pendingCount > 0) {
+                console.log(`    ${c.dim}Pending sync:${c.reset}  ${syncInfo.pendingCount} session(s)`);
+            }
+            console.log('');
         }
-        console.log('');
 
-        // Database info
-        console.log('Database:');
-        console.log('----------------------------------------');
-        console.log(`  Path:            ${getDatabasePath()}`);
+        // ── Footer ────────────────────────────────────────────
+        const now = new Date();
+        const timestamp = now.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        console.log(`${c.gray}  Last updated: ${timestamp}${c.reset}`);
+        console.log(`${c.gray}  DB: ${getDatabasePath()}${c.reset}`);
+        console.log(`${c.bold}  ╔══════════════════════════════════════════════════╗${c.reset}`);
+        console.log(`${c.bold}  ║  ${c.dim}Powered by CNaught · Track your AI footprint${c.reset}${c.bold}   ║${c.reset}`);
+        console.log(`${c.bold}  ╚══════════════════════════════════════════════════╝${c.reset}`);
         console.log('');
-
-        console.log('========================================');
-        console.log('\n');
     } catch (error) {
         logError('Failed to generate report', error);
-        console.log('  Error: Failed to generate report');
-        console.log('  Run /carbon:setup to initialize the tracker');
-        console.log('\n');
+        console.log(`  ${c.red}Error: Failed to generate report${c.reset}`);
+        console.log(`  Run /carbon:setup to initialize the tracker`);
+        console.log('');
     }
 }
 

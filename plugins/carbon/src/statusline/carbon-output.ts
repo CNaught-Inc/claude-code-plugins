@@ -5,17 +5,18 @@
  * and the statusline-wrapper entry point.
  */
 
-import { calculateCarbonFromTokens, formatCO2 } from '../carbon-calculator';
+import { calculateCarbonFromTokens } from '../carbon-calculator';
 import { queryReadonlyDb } from '../data-store';
 import { resolveProjectIdentifier } from '../project-identifier';
 import type { StatuslineInput } from '../utils/stdin';
 
-function getSessionCO2FromDb(sessionId: string): number | null {
+function getSessionStatsFromDb(sessionId: string): { co2Grams: number; energyWh: number } | null {
     return queryReadonlyDb((db) => {
         const row = db
-            .prepare('SELECT COALESCE(co2_grams, 0) as total FROM sessions WHERE session_id = ?')
-            .get(sessionId) as { total: number } | undefined;
-        return row?.total ?? null;
+            .prepare('SELECT COALESCE(co2_grams, 0) as co2, COALESCE(energy_wh, 0) as energy FROM sessions WHERE session_id = ?')
+            .get(sessionId) as { co2: number; energy: number } | undefined;
+        if (!row) return null;
+        return { co2Grams: row.co2, energyWh: row.energy };
     });
 }
 
@@ -66,6 +67,24 @@ function getTotalCO2FromDb(projectIdentifier?: string): number | null {
     });
 }
 
+function getTotalEnergyFromDb(projectIdentifier?: string): number | null {
+    return queryReadonlyDb((db) => {
+        let row: { total: number };
+        if (projectIdentifier) {
+            row = db
+                .prepare(
+                    'SELECT COALESCE(SUM(energy_wh), 0) as total FROM sessions WHERE project_identifier = ?'
+                )
+                .get(projectIdentifier) as { total: number };
+        } else {
+            row = db.prepare('SELECT COALESCE(SUM(energy_wh), 0) as total FROM sessions').get() as {
+                total: number;
+            };
+        }
+        return row.total;
+    });
+}
+
 /**
  * Get the carbon statusline output string from parsed input.
  * Returns the formatted string, or empty string if nothing to display.
@@ -78,39 +97,52 @@ export function getCarbonOutput(input: StatuslineInput): string {
 
     // Session CO2: prefer the authoritative DB value (cumulative, per-request TTFT).
     // Fall back to a live estimate from context window tokens before the first stop hook.
-    const dbSessionCO2 = input.session_id ? getSessionCO2FromDb(input.session_id) : null;
+    const dbSessionStats = input.session_id ? getSessionStatsFromDb(input.session_id) : null;
     let sessionCO2: number;
+    let sessionEnergyWh: number;
 
-    if (dbSessionCO2 !== null && dbSessionCO2 > 0) {
-        sessionCO2 = dbSessionCO2;
+    if (dbSessionStats !== null && dbSessionStats.co2Grams > 0) {
+        sessionCO2 = dbSessionStats.co2Grams;
+        sessionEnergyWh = dbSessionStats.energyWh;
     } else {
         // No DB record yet — estimate from current context window tokens
         const outputTokens = usage.output_tokens || 0;
-        sessionCO2 =
-            outputTokens > 0
-                ? calculateCarbonFromTokens(
-                      usage.input_tokens || 0,
-                      outputTokens,
-                      usage.cache_creation_input_tokens || 0,
-                      usage.cache_read_input_tokens || 0,
-                      input.model?.id || 'unknown'
-                  ).co2Grams
-                : 0;
+        if (outputTokens > 0) {
+            const result = calculateCarbonFromTokens(
+                usage.input_tokens || 0,
+                outputTokens,
+                usage.cache_creation_input_tokens || 0,
+                usage.cache_read_input_tokens || 0,
+                input.model?.id || 'unknown'
+            );
+            sessionCO2 = result.co2Grams;
+            sessionEnergyWh = result.energy.energyWh;
+        } else {
+            sessionCO2 = 0;
+            sessionEnergyWh = 0;
+        }
     }
 
     const totalCO2 = getTotalCO2FromDb(projectIdentifier);
+    const totalEnergyWh = getTotalEnergyFromDb(projectIdentifier);
 
     if (sessionCO2 === 0 && (totalCO2 === null || totalCO2 === 0)) {
         return '';
     }
 
-    const totalSuffix =
-        totalCO2 !== null && totalCO2 > 0 ? ` / ${formatCO2(totalCO2)}` : '';
+    const reset = '\x1b[0m';
+
+    // Build metrics — project totals only
+    const totalKg = totalCO2 !== null && totalCO2 > 0 ? (totalCO2 / 1000).toFixed(2) : (sessionCO2 / 1000).toFixed(2);
+    const co2Str = `CO\u2082 ${totalKg}kg`;
+
+    const effectiveEnergyWh = totalEnergyWh !== null && totalEnergyWh > 0 ? totalEnergyWh : sessionEnergyWh;
+    const totalKwh = (effectiveEnergyWh / 1000).toFixed(2);
+    const energyStr = `Energy ${totalKwh}kWh`;
 
     let projectSuffix = '';
     if (projectIdentifier && !projectIdentifier.startsWith('local_')) {
         const purple = '\x1b[38;5;96m';
-        const reset = '\x1b[0m';
         projectSuffix = ` \u00b7 ${purple}${projectIdentifier}${reset}`;
     }
 
@@ -118,20 +150,15 @@ export function getCarbonOutput(input: StatuslineInput): string {
     const syncInfo = getSyncInfo();
     if (syncInfo.enabled && syncInfo.userName && syncInfo.userId) {
         const synced = input.session_id ? getSessionSynced(input.session_id) : null;
-        const bold = '\x1b[1m';
         const green = '\x1b[32m';
-        const yellow = '\x1b[33m';
-        const dim = '\x1b[2m';
-        const reset = '\x1b[0m';
-        const nameStr = `${dim}${bold}${syncInfo.userName}${reset}`;
-        const syncStatus =
-            synced === true
-                ? ` \u00b7 ${green}\u2713 synced${reset}`
-                : synced === false
-                  ? ` \u00b7 ${yellow}\u25cb pending${reset}`
-                  : '';
-        syncSuffix = ` \u00b7 ${nameStr}${syncStatus}`;
+        const red = '\x1b[31m';
+        // ⇄ text-based sync arrows respond to ANSI coloring
+        if (synced === true) {
+            syncSuffix = ` ${green}\u21C4${reset}`;
+        } else if (synced === false) {
+            syncSuffix = ` ${red}\u21C4${reset}`;
+        }
     }
 
-    return `\u{1F331} Session: ${formatCO2(sessionCO2)}${totalSuffix} CO\u2082${projectSuffix}${syncSuffix}`;
+    return `Climate Impact: ${co2Str} \u00b7 ${energyStr}${projectSuffix}${syncSuffix}`;
 }
