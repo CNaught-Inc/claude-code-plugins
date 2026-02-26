@@ -173,13 +173,16 @@ async function main(): Promise<void> {
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
 
-            // Miles driven: ~404g CO2/mile (EPA average passenger vehicle)
-            const milesDriven = totalCO2 / 404;
-            // Daily home energy: US average household ~17,000 lbs CO2/year = ~21,127g/day
-            const daysHomeEnergy = totalCO2 / 21127;
+            // Constants from CNaught API EquivalentsCalculator
+            const KG_PER_CAR_YEAR = 4490;
+            const KG_PER_ANNUAL_HOME_ENERGY = 7930;
 
-            console.log(`    🚗  Miles driven      ${c.bold}${milesDriven.toFixed(3)} mi${c.reset}`);
-            console.log(`    🏠  Home energy        ${c.bold}${daysHomeEnergy.toFixed(4)} days${c.reset}`);
+            const totalKg = totalCO2 / 1000;
+            const carsOffRoad = totalKg / KG_PER_CAR_YEAR;
+            const homesEnergy = totalKg / KG_PER_ANNUAL_HOME_ENERGY;
+
+            console.log(`    🚗  Cars off road      ${c.bold}${carsOffRoad.toFixed(4)} car-years${c.reset}`);
+            console.log(`    🏠  Home energy         ${c.bold}${homesEnergy.toFixed(4)} home-years${c.reset}`);
             console.log('');
         }
 
