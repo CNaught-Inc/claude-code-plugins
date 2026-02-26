@@ -34,6 +34,7 @@ export function saveSessionToDb(
         energyWh: carbon.energy.energyWh,
         co2Grams: carbon.co2Grams,
         primaryModel: sessionUsage.primaryModel,
+        modelsUsed: sessionUsage.modelBreakdown,
         createdAt: sessionUsage.createdAt,
         updatedAt: sessionUsage.updatedAt
     });

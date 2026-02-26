@@ -115,6 +115,8 @@ function friendlyModelName(modelId: string): string {
         'claude-sonnet-4-5-20250929': 'Claude 4.5 Sonnet',
         'claude-opus-4-20250514': 'Claude Opus 4',
         'claude-opus-4-1-20250805': 'Claude Opus 4.1',
+        'claude-opus-4-6': 'Claude Opus 4.6',
+        'claude-sonnet-4-6': 'Claude Sonnet 4.6',
     };
     if (map[modelId]) return map[modelId];
     // Try to extract a readable name from the model ID
