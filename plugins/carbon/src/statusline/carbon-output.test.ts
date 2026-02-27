@@ -198,7 +198,7 @@ describe('getCarbonOutput sync display', () => {
 
         // Green ⇄ arrows for synced
         expect(result).toContain('\u21C4');
-        expect(result).toContain('\x1b[32m'); // green
+        expect(result).toContain('\x1b[38;2;193;215;199m'); // brand green
     });
 
     it('shows red arrows when session is not synced', () => {
@@ -217,7 +217,7 @@ describe('getCarbonOutput sync display', () => {
 
         // Red ⇄ arrows for not synced
         expect(result).toContain('\u21C4');
-        expect(result).toContain('\x1b[31m'); // red
+        expect(result).toContain('\x1b[38;2;208;83;63m'); // brand orange
     });
 
     it('does not show sync info when sync is disabled', () => {

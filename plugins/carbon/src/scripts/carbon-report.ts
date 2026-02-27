@@ -25,12 +25,13 @@ const c = {
     reset: '\x1b[0m',
     bold: '\x1b[1m',
     dim: '\x1b[2m',
-    green: '\x1b[32m',
-    yellow: '\x1b[33m',
-    blue: '\x1b[34m',
-    magenta: '\x1b[35m',
-    cyan: '\x1b[36m',
-    red: '\x1b[31m',
+    green: '\x1b[38;2;193;215;199m',    // Brand green #C1D7C7
+    yellow: '\x1b[38;2;243;214;95m',    // Brand yellow #F3D65F
+    blue: '\x1b[38;2;141;176;195m',     // Brand blue #8DB0C3
+    pink: '\x1b[38;2;245;192;238m',     // Brand pink #F5C0EE
+    teal: '\x1b[38;2;52;191;194m',      // Brand teal #34bfc2
+    peach: '\x1b[38;2;253;168;128m',    // Brand peach #FDA880
+    orange: '\x1b[38;2;208;83;63m',     // Brand orange #D0533F
     gray: '\x1b[38;5;242m',
 };
 
@@ -165,7 +166,7 @@ async function main(): Promise<void> {
         console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
         console.log('');
         console.log(`    ${c.bold}${c.yellow}CO₂${c.reset}    ${c.bold}${kg(totalCO2)}${c.reset} kg    ${c.dim}(${formatCO2(totalCO2)})${c.reset}`);
-        console.log(`    ${c.bold}${c.cyan}Energy${c.reset} ${c.bold}${kwh(totalEnergy)}${c.reset} kWh   ${c.dim}(${formatEnergy(totalEnergy)})${c.reset}`);
+        console.log(`    ${c.bold}${c.teal}Energy${c.reset} ${c.bold}${kwh(totalEnergy)}${c.reset} kWh   ${c.dim}(${formatEnergy(totalEnergy)})${c.reset}`);
         console.log(`    ${c.dim}Sessions: ${fmt(allTimeStats.totalSessions)} · Tokens: ${fmt(allTimeStats.totalTokens)}${c.reset}`);
         console.log('');
 
@@ -196,7 +197,7 @@ async function main(): Promise<void> {
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
 
-            const modelColors = [c.yellow, c.cyan, c.green, c.magenta, c.blue];
+            const modelColors = [c.yellow, c.teal, c.green, c.pink, c.blue, c.peach];
             for (let i = 0; i < modelStats.length; i++) {
                 const m = modelStats[i];
                 const color = modelColors[i % modelColors.length];
@@ -233,7 +234,7 @@ async function main(): Promise<void> {
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
 
-            const projectColors = [c.green, c.cyan, c.yellow, c.magenta, c.blue];
+            const projectColors = [c.green, c.teal, c.yellow, c.pink, c.blue, c.peach];
             for (let i = 0; i < Math.min(projectStats.length, 5); i++) {
                 const p = projectStats[i];
                 const color = projectColors[i % projectColors.length];
@@ -276,7 +277,7 @@ async function main(): Promise<void> {
         console.log('');
     } catch (error) {
         logError('Failed to generate report', error);
-        console.log(`  ${c.red}Error: Failed to generate report${c.reset}`);
+        console.log(`  ${c.orange}Error: Failed to generate report${c.reset}`);
         console.log(`  Run /carbon:setup to initialize the tracker`);
         console.log('');
     }

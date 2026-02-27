@@ -144,8 +144,8 @@ export function getCarbonOutput(input: StatuslineInput): string {
     const syncInfo = getSyncInfo();
     if (syncInfo.enabled && syncInfo.userName && syncInfo.userId) {
         const synced = input.session_id ? getSessionSynced(input.session_id) : null;
-        const green = '\x1b[32m';
-        const red = '\x1b[31m';
+        const green = '\x1b[38;2;193;215;199m';   // Brand green #C1D7C7
+        const red = '\x1b[38;2;208;83;63m';       // Brand orange #D0533F
         // ⇄ text-based sync arrows respond to ANSI coloring
         if (synced === true) {
             syncSuffix = ` ${green}\u21C4${reset}`;
