@@ -171,14 +171,14 @@ async function main(): Promise<void> {
 
             // Constants from CNaught API EquivalentsCalculator
             const KG_PER_CAR_YEAR = 4490;
-            const KG_PER_ANNUAL_HOME_ENERGY = 7930;
+            const KG_PER_DAILY_HOME_ENERGY = 7930 / 365;
 
             const totalKg = totalCO2 / 1000;
             const carsOffRoad = totalKg / KG_PER_CAR_YEAR;
-            const homesEnergy = totalKg / KG_PER_ANNUAL_HOME_ENERGY;
+            const homeDays = totalKg / KG_PER_DAILY_HOME_ENERGY;
 
             console.log(`    🚗  Cars off road      ${c.bold}${carsOffRoad.toFixed(4)} car-years${c.reset}`);
-            console.log(`    🏠  Home energy         ${c.bold}${homesEnergy.toFixed(4)} home-years${c.reset}`);
+            console.log(`    🏠  Home energy         ${c.bold}${homeDays.toFixed(4)} days${c.reset}`);
             console.log('');
         }
 
