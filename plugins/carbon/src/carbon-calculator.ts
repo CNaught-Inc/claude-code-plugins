@@ -317,8 +317,8 @@ export function calculateCarbonFromTokens(
  * Relatable carbon equivalents
  */
 export interface CarbonEquivalents {
-    /** Kilometers driven in an average car */
-    kmDriven: number;
+    /** Miles driven in an average car */
+    milesDriven: number;
     /** Number of smartphone full charges */
     phoneCharges: number;
     /** Hours of LED light (10W) usage */
@@ -333,15 +333,21 @@ export interface CarbonEquivalents {
  * Convert CO2 grams to relatable equivalents
  *
  * Sources:
- * - Average car: ~120g CO2/km
+ * - Average car: 22.4 mpg × 0.1125 gal/kgCO2 = 2.52 miles/kgCO2
+ *     (EPA: 1 gallon gasoline = 8.887 kgCO2, avg fuel economy = 22.4 mpg)
  * - Smartphone charge: ~8g CO2 (0.01kWh * 800 gCO2/kWh grid average)
  * - LED bulb (10W): ~3g CO2/hour (10Wh * 300 gCO2/kWh)
  * - Cup of coffee: ~21g CO2 (production + brewing)
  * - Google search: ~0.2g CO2
  */
+const MPG = 22.4;
+const GALLONS_PER_KG_CO2 = 1 / 8.887;
+const MILES_PER_KG_CO2 = MPG * GALLONS_PER_KG_CO2;
+const GRAMS_CO2_PER_MILE = 1000 / MILES_PER_KG_CO2;
+
 export function calculateEquivalents(co2Grams: number): CarbonEquivalents {
     return {
-        kmDriven: co2Grams / 120,
+        milesDriven: co2Grams / GRAMS_CO2_PER_MILE,
         phoneCharges: co2Grams / 8,
         ledLightHours: co2Grams / 3,
         cupsOfCoffee: co2Grams / 21,

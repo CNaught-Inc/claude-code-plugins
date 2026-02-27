@@ -250,17 +250,19 @@ describe('calculateCarbonFromTokens', () => {
 
 describe('calculateEquivalents', () => {
     it('calculates relatable equivalents', () => {
-        const eq = calculateEquivalents(120);
-        expect(eq.kmDriven).toBeCloseTo(1); // 120g / 120g per km
-        expect(eq.phoneCharges).toBeCloseTo(15); // 120g / 8g per charge
-        expect(eq.ledLightHours).toBeCloseTo(40); // 120g / 3g per hour
-        expect(eq.cupsOfCoffee).toBeCloseTo(120 / 21);
-        expect(eq.googleSearches).toBeCloseTo(600); // 120g / 0.2g per search
+        // 1 kg CO2 = 22.4 mpg × (1/8.887) gal/kg = 2.52 miles
+        // So 1000g CO2 → 2.52 miles, i.e. ~396.8 gCO2/mile
+        const eq = calculateEquivalents(1000);
+        expect(eq.milesDriven).toBeCloseTo(2.52, 1); // 1000g / ~396.8g per mile
+        expect(eq.phoneCharges).toBeCloseTo(125); // 1000g / 8g per charge
+        expect(eq.ledLightHours).toBeCloseTo(1000 / 3); // 1000g / 3g per hour
+        expect(eq.cupsOfCoffee).toBeCloseTo(1000 / 21);
+        expect(eq.googleSearches).toBeCloseTo(5000); // 1000g / 0.2g per search
     });
 
     it('returns zero equivalents for zero CO2', () => {
         const eq = calculateEquivalents(0);
-        expect(eq.kmDriven).toBe(0);
+        expect(eq.milesDriven).toBe(0);
         expect(eq.phoneCharges).toBe(0);
     });
 });
