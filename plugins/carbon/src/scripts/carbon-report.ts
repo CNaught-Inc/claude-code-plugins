@@ -10,7 +10,6 @@ import { formatCO2, formatEnergy } from '../carbon-calculator';
 import {
     getAggregateStats,
     getConfig,
-    getDailyStats,
     getDatabasePath,
     getProjectStats,
     getUnsyncedSessions,
@@ -52,11 +51,6 @@ function kwh(wh: number): string {
 function pct(value: number, total: number): string {
     if (total === 0) return '0%';
     return `${Math.round((value / total) * 100)}%`;
-}
-
-function formatDayName(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
 // ── Graph builders ────────────────────────────────────────────
@@ -134,11 +128,10 @@ async function main(): Promise<void> {
     try {
         const projectId = resolveProjectIdentifier(process.cwd());
 
-        const { allTimeStats, dailyStats, projectStats, modelStats, syncInfo } = withDatabase((db) => {
+        const { allTimeStats, projectStats, modelStats, syncInfo } = withDatabase((db) => {
             const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
             return {
                 allTimeStats: getAggregateStats(db, projectId),
-                dailyStats: getDailyStats(db, 7, projectId),
                 projectStats: getProjectStats(db, 30),
                 modelStats: getModelStats(projectId),
                 syncInfo: {
@@ -205,23 +198,6 @@ async function main(): Promise<void> {
                 const bar = progressBar(m.co2Grams, totalModelCO2, 15, color);
                 const co2 = `${kg(m.co2Grams)}kg`.padStart(8);
                 console.log(`    ${bar} ${color}${name}${c.reset} ${c.bold}${co2}${c.reset}  ${c.dim}${m.sessions} sessions · ${pct(m.co2Grams, totalModelCO2)}${c.reset}`);
-            }
-            console.log('');
-        }
-
-        // ── Daily breakdown ───────────────────────────────────
-        if (dailyStats.length > 0) {
-            const maxCO2 = Math.max(...dailyStats.map((d) => d.co2Grams));
-
-            console.log(`${c.bold}  Daily Breakdown (7 Days)${c.reset}`);
-            console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
-            console.log('');
-
-            for (const day of dailyStats) {
-                const dayName = formatDayName(day.date).padEnd(4);
-                const co2Str = formatCO2(day.co2Grams).padStart(8);
-                const bar = progressBar(day.co2Grams, maxCO2, 15, c.green);
-                console.log(`    ${bar} ${c.dim}${dayName}${c.reset} ${c.bold}${co2Str}${c.reset}`);
             }
             console.log('');
         }

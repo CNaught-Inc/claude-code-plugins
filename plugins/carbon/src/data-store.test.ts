@@ -11,7 +11,6 @@ import {
     getAllSessionIds,
     getClaudeDir,
     getConfig,
-    getDailyStats,
     getDatabasePath,
     getHomeDir,
     getInstalledAt,
@@ -253,50 +252,6 @@ describe('getAggregateStats with project filtering', () => {
         const stats = getAggregateStats(db, 'nonexistent');
         expect(stats.totalSessions).toBe(0);
         expect(stats.totalTokens).toBe(0);
-        db.close();
-    });
-});
-
-describe('getDailyStats with project filtering', () => {
-    it('filters by project identifier', () => {
-        const db = createTestDb();
-        const today = new Date().toISOString();
-        upsertSession(
-            db,
-            makeSession({
-                sessionId: 's1',
-                projectIdentifier: 'org_project-a_aaaa1111',
-                totalTokens: 1000,
-                co2Grams: 0.05,
-                createdAt: new Date(today),
-                updatedAt: new Date(today)
-            })
-        );
-        upsertSession(
-            db,
-            makeSession({
-                sessionId: 's2',
-                projectIdentifier: 'org_project-b_bbbb2222',
-                totalTokens: 2000,
-                co2Grams: 0.1,
-                createdAt: new Date(today),
-                updatedAt: new Date(today)
-            })
-        );
-
-        const statsA = getDailyStats(db, 7, 'org_project-a_aaaa1111');
-        expect(statsA).toHaveLength(1);
-        expect(statsA[0].tokens).toBe(1000);
-
-        const statsB = getDailyStats(db, 7, 'org_project-b_bbbb2222');
-        expect(statsB).toHaveLength(1);
-        expect(statsB[0].tokens).toBe(2000);
-
-        // Without filter returns combined
-        const statsAll = getDailyStats(db, 7);
-        expect(statsAll).toHaveLength(1);
-        expect(statsAll[0].tokens).toBe(3000);
-
         db.close();
     });
 });

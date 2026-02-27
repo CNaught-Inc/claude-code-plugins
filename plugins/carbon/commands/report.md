@@ -28,10 +28,6 @@ Generate a carbon emissions report.
 - Hours of LED light usage
 - Google searches
 
-### Daily Breakdown
-- Per-day emissions chart
-- Peak usage days
-
 ### Project Breakdown (optional)
 - Emissions by project/repository
 

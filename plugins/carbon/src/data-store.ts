@@ -49,17 +49,6 @@ export interface AggregateStats {
 }
 
 /**
- * Daily stats for reporting
- */
-export interface DailyStats {
-    date: string;
-    sessions: number;
-    tokens: number;
-    energyWh: number;
-    co2Grams: number;
-}
-
-/**
  * Project stats for reporting
  */
 export interface ProjectStats {
@@ -391,39 +380,6 @@ export function getAggregateStats(db: Database, projectIdentifier?: string): Agg
         totalEnergyWh: Number(row.total_energy_wh),
         totalCO2Grams: Number(row.total_co2_grams)
     };
-}
-
-/**
- * Get daily statistics for the last N days
- */
-export function getDailyStats(db: Database, days: number = 7, projectIdentifier?: string): DailyStats[] {
-    const projectFilter = projectIdentifier ? 'AND project_identifier = ?' : '';
-    const stmt = db.prepare(`
-        SELECT
-            DATE(created_at) as date,
-            COUNT(*) as sessions,
-            SUM(total_tokens) as tokens,
-            SUM(energy_wh) as energy_wh,
-            SUM(co2_grams) as co2_grams
-        FROM sessions
-        WHERE created_at >= DATE('now', '-' || ? || ' days')
-        ${projectFilter}
-        GROUP BY DATE(created_at)
-        ORDER BY date
-    `);
-
-    const rows = (projectIdentifier ? stmt.all(days, projectIdentifier) : stmt.all(days)) as Record<
-        string,
-        unknown
-    >[];
-
-    return rows.map((row) => ({
-        date: row.date as string,
-        sessions: Number(row.sessions),
-        tokens: Number(row.tokens),
-        energyWh: Number(row.energy_wh),
-        co2Grams: Number(row.co2_grams)
-    }));
 }
 
 /**
