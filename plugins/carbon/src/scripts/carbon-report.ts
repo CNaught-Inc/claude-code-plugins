@@ -41,11 +41,13 @@ function fmt(num: number): string {
 }
 
 function kg(grams: number): string {
-    return (grams / 1000).toFixed(2);
+    const val = grams / 1000;
+    return val > 0 && val < 0.01 ? '<0.01' : val.toFixed(2);
 }
 
 function kwh(wh: number): string {
-    return (wh / 1000).toFixed(2);
+    const val = wh / 1000;
+    return val > 0 && val < 0.01 ? '<0.01' : val.toFixed(2);
 }
 
 function pct(value: number, total: number): string {
