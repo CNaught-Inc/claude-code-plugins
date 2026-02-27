@@ -114,6 +114,29 @@ const MODEL_CONFIGS: Record<string, ModelConfig> = {
         medianTps: 58,
         medianTtftSeconds: 1.38,
     },
+
+    // Versionless entries — any dated variant (e.g. claude-opus-4-5-20251101) maps here
+    'claude-opus-4-5': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude Opus 4.5',
+        family: 'opus',
+        medianTps: 78,
+        medianTtftSeconds: 1.33,
+    },
+    'claude-opus-4-6': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude Opus 4.6',
+        family: 'opus',
+        medianTps: 69,
+        medianTtftSeconds: 1.73,
+    },
+    'claude-sonnet-4-6': {
+        ...ANTHROPIC_LARGE_BASE,
+        displayName: 'Claude Sonnet 4.6',
+        family: 'sonnet',
+        medianTps: 59,
+        medianTtftSeconds: 0.88,
+    },
 };
 
 /** Family-level fallback configs for unrecognized model IDs */
@@ -136,6 +159,12 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
 export function getModelConfig(modelId: string): ModelConfig {
     if (MODEL_CONFIGS[modelId]) {
         return MODEL_CONFIGS[modelId];
+    }
+
+    // Strip date suffix (e.g. claude-opus-4-5-20251101 → claude-opus-4-5)
+    const versionless = modelId.replace(/-\d{8}$/, '');
+    if (versionless !== modelId && MODEL_CONFIGS[versionless]) {
+        return MODEL_CONFIGS[versionless];
     }
 
     const lowerModel = modelId.toLowerCase();
