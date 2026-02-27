@@ -171,15 +171,17 @@ async function main(): Promise<void> {
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
 
-            // Constants from CNaught API EquivalentsCalculator
-            const KG_PER_CAR_YEAR = 4490;
+            // Constants from EPA: 1 gallon gasoline = 8.887 kg CO2, avg fuel economy = 22.4 mpg
+            const MPG = 22.4;
+            const GALLONS_PER_KG_CO2 = 1 / 8.887;
+            const MILES_PER_KG_CO2 = MPG * GALLONS_PER_KG_CO2;
             const KG_PER_DAILY_HOME_ENERGY = 7930 / 365;
 
             const totalKg = totalCO2 / 1000;
-            const carsOffRoad = totalKg / KG_PER_CAR_YEAR;
+            const milesDriven = totalKg * MILES_PER_KG_CO2;
             const homeDays = totalKg / KG_PER_DAILY_HOME_ENERGY;
 
-            console.log(`    🚗  Cars off road      ${c.bold}${carsOffRoad.toFixed(4)} car-years${c.reset}`);
+            console.log(`    🚗  Miles driven       ${c.bold}${milesDriven.toFixed(2)} miles${c.reset}`);
             console.log(`    🏠  Home energy         ${c.bold}${homeDays.toFixed(4)} days${c.reset}`);
             console.log('');
         }
