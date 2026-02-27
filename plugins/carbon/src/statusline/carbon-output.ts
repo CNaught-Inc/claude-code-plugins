@@ -133,11 +133,13 @@ export function getCarbonOutput(input: StatuslineInput): string {
     const reset = '\x1b[0m';
 
     // Build metrics — project totals only
-    const totalKg = totalCO2 !== null && totalCO2 > 0 ? (totalCO2 / 1000).toFixed(2) : (sessionCO2 / 1000).toFixed(2);
+    const rawKg = totalCO2 !== null && totalCO2 > 0 ? totalCO2 / 1000 : sessionCO2 / 1000;
+    const totalKg = rawKg > 0 && rawKg < 0.01 ? '<0.01' : rawKg.toFixed(2);
     const co2Str = `CO\u2082 ${totalKg}kg`;
 
     const effectiveEnergyWh = totalEnergyWh !== null && totalEnergyWh > 0 ? totalEnergyWh : sessionEnergyWh;
-    const totalKwh = (effectiveEnergyWh / 1000).toFixed(2);
+    const rawKwh = effectiveEnergyWh / 1000;
+    const totalKwh = rawKwh > 0 && rawKwh < 0.01 ? '<0.01' : rawKwh.toFixed(2);
     const energyStr = `Energy ${totalKwh}kWh`;
 
     let syncSuffix = '';
