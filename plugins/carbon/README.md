@@ -89,11 +89,11 @@ Setup initializes the SQLite database, configures the CO2 statusline in `.claude
 
 Generates a report including:
 
-- **All-time project statistics** — sessions, tokens, energy (Wh), CO2 (g)
-- **7-day summary** — recent usage breakdown
-- **Relatable equivalents** — km driven, phone charges, LED hours, Google searches
-- **Daily breakdown** — per-day emissions
-- **Project breakdown** — emissions by project/repository
+- **All-time totals** — CO₂ (kg), energy (kWh), sessions, and tokens
+- **Relatable equivalents** — car-years off road, days of home energy usage
+- **Usage by model** — breakdown by Claude model with visual progress bars
+- **Project breakdown** — top projects from the last 30 days (shown when multiple projects exist)
+- **Anonymous sync info** — display name and pending sync count (when sync is enabled)
 
 ### `/carbon:uninstall`
 
