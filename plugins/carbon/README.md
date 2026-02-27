@@ -52,7 +52,7 @@ By default, the plugin points at the production API.
 
 If you've installed a local copy of the plugin, to point at the stage API, copy `.env.local.sample` to `.env.local` before running.
 
-If you have the plugin installed from GitHub and want to point at the staging API, create `.claude/settings.local.json` in your project root:
+If you have the plugin installed from GitHub and want to point at the staging API, add this to `~/.claude/settings.json`:
 
 ```json
 {

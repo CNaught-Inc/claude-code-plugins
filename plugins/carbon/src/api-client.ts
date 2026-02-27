@@ -8,6 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { getClaudeDir } from './data-store';
 import type { SessionRecord } from './data-store';
 import { log, logError } from './utils/stdin';
 
@@ -22,16 +23,16 @@ export interface SyncConfig {
 
 /**
  * Get the API base URL (without path).
- * Priority: CNAUGHT_API_URL env var > settings.local.json > default production URL.
+ * Priority: CNAUGHT_API_URL env var > ~/.claude/settings.json > default production URL.
  * The env var takes precedence so .env.local overrides always win during development.
- * The settings.local.json override lets users point at a staging API without plugin changes.
+ * The settings.json override lets users point at a staging API without plugin changes.
  */
 export function getApiUrl(): string {
     if (process.env.CNAUGHT_API_URL) return process.env.CNAUGHT_API_URL;
 
-    // Check project-level .claude/settings.local.json
+    // Check global ~/.claude/settings.json
     try {
-        const settingsPath = path.join(process.cwd(), '.claude', 'settings.local.json');
+        const settingsPath = path.join(getClaudeDir(), 'settings.json');
         if (fs.existsSync(settingsPath)) {
             const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
             const value = settings.carbonTracker?.apiUrl;

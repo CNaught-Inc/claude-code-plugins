@@ -30,7 +30,7 @@ import {
 import { shortHash } from '../project-identifier';
 import { resolveProjectIdentifier } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
-import { findTranscriptsForProject, getSessionIdFromPath, parseSession } from '../session-parser';
+import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
 import { generateMachineUserId } from '../utils/machine-id';
 import { logError } from '../utils/stdin';
@@ -46,12 +46,11 @@ function getPluginRoot(): string {
 
 
 /**
- * Backfill historical sessions from transcript files on disk.
- * Only processes sessions for the given project path.
+ * Backfill historical sessions from transcript files on disk across all projects.
  */
-function backfillSessions(db: import('bun:sqlite').Database, projectPath: string): number {
+function backfillSessions(db: import('bun:sqlite').Database): number {
     const existingSessionIds = new Set(getAllSessionIds(db));
-    const transcripts = findTranscriptsForProject(projectPath);
+    const transcripts = findAllTranscripts();
     let count = 0;
 
     for (const transcriptPath of transcripts) {
@@ -179,7 +178,7 @@ async function main(): Promise<void> {
 
             if (shouldBackfill) {
                 console.log('  Backfilling historical sessions...');
-                const backfilled = backfillSessions(db, process.cwd());
+                const backfilled = backfillSessions(db);
                 console.log(`  Backfilled ${backfilled} historical session(s)`);
             }
         });
