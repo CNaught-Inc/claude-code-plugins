@@ -58,11 +58,14 @@ Data is automatically stored in a separate database per API endpoint, so staging
 
 ### Updating
 
-To pull the latest plugin version:
+Update the marketplace to fetch the latest available versions, then update the plugin:
 
 ```
 /plugin marketplace update cnaught-plugins
+/plugin update carbon@cnaught-plugins
 ```
+
+You can also manage all of this interactively via Claude Code's built-in `/plugin` command. We recommend enabling auto-update for the marketplace so you always have access to the latest versions — go to `/plugin` > **Marketplaces** > select the marketplace > **Enable auto-update**.
 
 ## Setup
 
