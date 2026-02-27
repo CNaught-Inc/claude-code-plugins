@@ -22,7 +22,7 @@ Ask the user whether they want to:
 ### Step 3: Ask about anonymous tracking
 
 Ask the user whether they want to enable anonymous carbon tracking with CNaught:
-- **Enable** — session metrics (token counts, CO2, energy, project path) will be synced to CNaught's API. No code, conversations, or personal information is shared. (default)
+- **Enable** — session metrics (token counts, CO₂, energy, project path) will be synced to CNaught's API. No code, conversations, or personal information is shared. (default)
 - **Disable** — all data stays local only
 
 If the user kept sync enabled (the default), ask them for an optional display name (DO NOT refer to a leaderboard as there is no such thing). Let them know that if they skip this, a fun random name will be generated for them (e.g., "Curious Penguin", "Swift Falcon").
@@ -42,14 +42,14 @@ npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup.ts [--backfill] [--dis
 This will:
 - Initialize the local SQLite database
 - Convert any project/local scope installation to user (global) scope
-- Configure `~/.claude/settings.json` to enable the CO2 statusline (active across all projects)
+- Configure `~/.claude/settings.json` to enable the CO₂ statusline (active across all projects)
 - (If `--backfill`) Process historical transcript files into the database
 - (Unless `--disable-sync`) Generate a random identity and enable background sync to CNaught API
 - (If `--project-name`) Store the custom project name in the database
 
 ### Step 5: Check for local statusline overrides
 
-After the setup script runs, check if the current project has a `.claude/settings.local.json` or `.claude/settings.json` file that contains its own `statusLine` entry. If it does, warn the user that this local statusline will override the global carbon statusline, and the CO2 indicator won't appear in this project. Offer to remove the `statusLine` key from the local file to fix it.
+After the setup script runs, check if the current project has a `.claude/settings.local.json` or `.claude/settings.json` file that contains its own `statusLine` entry. If it does, warn the user that this local statusline will override the global carbon statusline, and the CO₂ indicator won't appear in this project. Offer to remove the `statusLine` key from the local file to fix it.
 
 ### Step 6: Verify setup
 
@@ -57,12 +57,12 @@ After the setup script runs, check if the current project has a `.claude/setting
 npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-report.ts
 ```
 
-Show the output to the user and confirm that the database is initialized, the statusline is installed, and CO2 tracking is active.
+Show the output to the user and confirm that the database is initialized, the statusline is installed, and CO₂ tracking is active.
 
 ## Notes
 
 - You can run setup again at any time to reconfigure
-- The statusline shows real-time CO2 estimates in the Claude Code status bar across all projects
+- The statusline shows real-time CO₂ estimates in the Claude Code status bar across all projects
 - Sessions are tracked automatically via hooks — no manual action needed
 - If sync is enabled, data syncs in the background after each response (non-blocking)
 - Use `/carbon:rename-project` to change the project name later

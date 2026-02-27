@@ -14,13 +14,13 @@ Generate a carbon emissions report.
 - Total sessions tracked
 - Total tokens used (input/output/cache creation/cache read)
 - Total energy consumption (Wh)
-- Total CO2 emissions (grams)
+- Total CO₂ emissions (grams)
 
 ### 7-Day Summary
 - Number of sessions
 - Total tokens processed
 - Energy consumption
-- CO2 emissions
+- CO₂ emissions
 
 ### Relatable Equivalents
 - Kilometers driven in a car
