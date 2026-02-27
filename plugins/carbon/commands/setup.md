@@ -6,6 +6,26 @@ Set up the CNaught carbon tracking plugin.
 
 Follow these steps in order:
 
+### Step 0: Check for existing setup
+
+Run the setup check script to see if the plugin has already been set up:
+
+```bash
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup-check.ts
+```
+
+This outputs JSON. If `isSetup` is `true`, the plugin has already been configured. Show the user their current configuration:
+- When they first set up (installedAt)
+- Whether sync is enabled and their display name
+- Their project name (if custom)
+- Whether the statusline is active
+
+Then ask the user what they'd like to do:
+- **Reconfigure** — walk through the full setup again (continue to Step 1)
+- **Nothing** — everything is already set up, exit
+
+If `isSetup` is `false`, this is a first-time setup — proceed to Step 1.
+
 ### Step 1: Ask about project name (optional)
 
 Ask the user if they'd like to set a custom project name. Let them know:
