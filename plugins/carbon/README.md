@@ -6,9 +6,17 @@ Track carbon emissions from your Claude Code usage. See real-time CO2 estimates 
 
 - Estimates carbon emissions per session using the [Jegham et al.](https://arxiv.org/abs/2505.09598) methodology
 - Stores session data locally via SQLite (`~/.claude/carbon-tracker.db`)
-- Real-time status line showing session and all-time CO2
+- Real-time status line showing session and all-time CO₂ emissions
 - Slash commands for setup, reporting, project renaming, and uninstalling
 - Optionally sync anonymous metrics to CNaught (no code or conversations shared)
+
+## Prerequisites
+
+This plugin requires **Node.js (v18+)** with `npx` available on your `PATH`. `npx` is used to run the plugin's hooks and scripts. All other dependencies are installed automatically.
+
+Verify with `node --version && npx --version`. If not installed, get Node.js from [nodejs.org](https://nodejs.org) or via your package manager (e.g., `brew install node`).
+
+> **Note:** If you use a version manager like `nvm`, make sure Node.js is available in the system-wide PATH.
 
 ## Installation
 
@@ -76,7 +84,7 @@ After installing, run `/carbon:setup` in any project. It walks you through:
 3. **Anonymous tracking** — optionally sync metrics to CNaught's API
 4. **Display name** — choose a name or get a random one (e.g., "Curious Penguin")
 
-Setup initializes the SQLite database, configures the CO2 statusline in `.claude/settings.local.json`, and optionally enables background sync. Dependencies are installed automatically on first session start.
+Setup initializes the SQLite database, configures the CO₂ statusline in `.claude/settings.local.json`, and optionally enables background sync. Dependencies are installed automatically on first session start.
 
 ## Commands
 
