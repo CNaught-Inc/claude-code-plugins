@@ -66,18 +66,6 @@ export const StopInputSchema = z.object({
 export type StopInput = z.infer<typeof StopInputSchema>;
 
 /**
- * Schema for session end hook input
- */
-export const SessionEndInputSchema = z.object({
-    session_id: z.string(),
-    project_path: z.string().optional(),
-    cwd: z.string().optional(),
-    transcript_path: z.string().optional()
-});
-
-export type SessionEndInput = z.infer<typeof SessionEndInputSchema>;
-
-/**
  * Schema for statusline input
  *
  * Claude Code sends a rich JSON object to statusline commands.

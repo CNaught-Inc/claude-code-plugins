@@ -429,35 +429,6 @@ export function findAllTranscripts(): string[] {
 }
 
 /**
- * Find transcript files for a specific project path.
- * The project path is encoded by replacing slashes with dashes
- * (e.g., /Users/foo/bar → -Users-foo-bar).
- */
-export function findTranscriptsForProject(projectPath: string): string[] {
-    const projectsDir = getClaudeProjectsDir();
-    const encodedPath = projectPath.replace(/\//g, '-');
-    const projectDir = path.join(projectsDir, encodedPath);
-    const transcripts: string[] = [];
-
-    if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
-        return transcripts;
-    }
-
-    try {
-        const files = fs.readdirSync(projectDir);
-        for (const file of files) {
-            if (file.endsWith('.jsonl')) {
-                transcripts.push(path.join(projectDir, file));
-            }
-        }
-    } catch {
-        // Ignore errors
-    }
-
-    return transcripts;
-}
-
-/**
  * Extract session ID from transcript path
  */
 export function getSessionIdFromPath(transcriptPath: string): string {

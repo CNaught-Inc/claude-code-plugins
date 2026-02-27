@@ -6,7 +6,7 @@
 
 import '../utils/load-env';
 
-import { formatCO2, formatEnergy } from '../carbon-calculator';
+import { formatCO2, formatEnergy, getModelConfig, MILES_PER_KG_CO2 } from '../carbon-calculator';
 import {
     getAggregateStats,
     getConfig,
@@ -104,24 +104,7 @@ function getModelStats(projectIdentifier?: string): ModelStats[] {
 // ── Friendly model name ───────────────────────────────────────
 
 function friendlyModelName(modelId: string): string {
-    const map: Record<string, string> = {
-        'claude-3-haiku-20240307': 'Claude 3 Haiku',
-        'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku',
-        'claude-haiku-4-5-20251001': 'Claude 4.5 Haiku',
-        'claude-sonnet-4-20250514': 'Claude Sonnet 4',
-        'claude-sonnet-4-5-20250929': 'Claude 4.5 Sonnet',
-        'claude-opus-4-20250514': 'Claude Opus 4',
-        'claude-opus-4-1-20250805': 'Claude Opus 4.1',
-        'claude-opus-4-6': 'Claude Opus 4.6',
-        'claude-sonnet-4-6': 'Claude Sonnet 4.6',
-    };
-    if (map[modelId]) return map[modelId];
-    // Try to extract a readable name from the model ID
-    const lower = modelId.toLowerCase();
-    if (lower.includes('opus')) return 'Claude Opus';
-    if (lower.includes('sonnet')) return 'Claude Sonnet';
-    if (lower.includes('haiku')) return 'Claude Haiku';
-    return modelId;
+    return getModelConfig(modelId).displayName;
 }
 
 // ── Main report ───────────────────────────────────────────────
@@ -171,10 +154,6 @@ async function main(): Promise<void> {
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
 
-            // Constants from EPA: 1 gallon gasoline = 8.887 kg CO2, avg fuel economy = 22.4 mpg
-            const MPG = 22.4;
-            const GALLONS_PER_KG_CO2 = 1 / 8.887;
-            const MILES_PER_KG_CO2 = MPG * GALLONS_PER_KG_CO2;
             const KG_PER_DAILY_HOME_ENERGY = 7930 / 365;
 
             const totalKg = totalCO2 / 1000;

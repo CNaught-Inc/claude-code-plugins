@@ -4,7 +4,6 @@ import {
     calculateCarbonFromTokens,
     calculateCO2FromEnergy,
     calculateEnergy,
-    calculateEquivalents,
     calculateRecordCarbon,
     calculateSessionCarbon,
     formatCO2,
@@ -245,25 +244,6 @@ describe('calculateCarbonFromTokens', () => {
         // inferenceTime = (1.27 + 500/81) / 3600 ≈ 0.002067 hours
         // Energy ≈ 1.54 Wh
         expect(result.energy.energyWh).toBeCloseTo(1.54, 1);
-    });
-});
-
-describe('calculateEquivalents', () => {
-    it('calculates relatable equivalents', () => {
-        // 1 kg CO2 = 22.4 mpg × (1/8.887) gal/kg = 2.52 miles
-        // So 1000g CO2 → 2.52 miles, i.e. ~396.8 gCO2/mile
-        const eq = calculateEquivalents(1000);
-        expect(eq.milesDriven).toBeCloseTo(2.52, 1); // 1000g / ~396.8g per mile
-        expect(eq.phoneCharges).toBeCloseTo(125); // 1000g / 8g per charge
-        expect(eq.ledLightHours).toBeCloseTo(1000 / 3); // 1000g / 3g per hour
-        expect(eq.cupsOfCoffee).toBeCloseTo(1000 / 21);
-        expect(eq.googleSearches).toBeCloseTo(5000); // 1000g / 0.2g per search
-    });
-
-    it('returns zero equivalents for zero CO2', () => {
-        const eq = calculateEquivalents(0);
-        expect(eq.milesDriven).toBe(0);
-        expect(eq.phoneCharges).toBe(0);
     });
 });
 

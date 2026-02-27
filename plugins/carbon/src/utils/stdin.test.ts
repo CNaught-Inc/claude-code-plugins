@@ -3,7 +3,6 @@ import { describe, expect, it, spyOn } from 'bun:test';
 import {
     log,
     logError,
-    SessionEndInputSchema,
     SessionStartInputSchema,
     StatuslineInputSchema,
     StopInputSchema,
@@ -51,21 +50,6 @@ describe('StopInputSchema', () => {
 
     it('rejects input missing session_id', () => {
         expect(() => StopInputSchema.parse({ transcript_path: '/foo' })).toThrow();
-    });
-});
-
-describe('SessionEndInputSchema', () => {
-    it('parses valid input', () => {
-        const result = SessionEndInputSchema.parse({
-            session_id: 'abc',
-            transcript_path: '/path.jsonl'
-        });
-        expect(result.session_id).toBe('abc');
-        expect(result.transcript_path).toBe('/path.jsonl');
-    });
-
-    it('rejects input missing session_id', () => {
-        expect(() => SessionEndInputSchema.parse({})).toThrow();
     });
 });
 
