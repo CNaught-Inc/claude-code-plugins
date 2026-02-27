@@ -26,7 +26,7 @@ Then ask the user what they'd like to do:
 
 If `isSetup` is `false`, this is a first-time setup — proceed to Step 1.
 
-### Step 1: Ask about project name (optional)
+### Step 1: Ask about project name
 
 Ask the user if they'd like to set a custom project name. Let them know:
 - By default, the project is identified by the GitHub repo (e.g., `cnaught/claude-code-plugins`) if available
