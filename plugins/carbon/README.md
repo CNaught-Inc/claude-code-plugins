@@ -1,6 +1,6 @@
 # Carbon Tracker Plugin
 
-Track carbon emissions from your Claude Code usage. See real-time CO2 estimates in your status bar, generate reports with relatable equivalents, and optionally sync anonymized metrics to CNaught.
+Track carbon emissions from your Claude Code usage. See real-time CO₂ estimates in your status bar, generate reports with relatable equivalents, and optionally sync anonymized metrics to CNaught.
 
 **Features:**
 
@@ -112,7 +112,7 @@ Removes tracking data for the current project. If no other projects have tracked
 
 ## Statusline
 
-Once set up, the status bar shows real-time CO2:
+Once set up, the status bar shows real-time CO₂:
 
 ```
 🌱 Session: 0.42g / 12.35g CO₂ · org_repo_a1b2c3d4 · Curious Penguin · ✓ synced
@@ -120,7 +120,7 @@ Once set up, the status bar shows real-time CO2:
 
 | Segment | Description |
 |---------|-------------|
-| `Session: 0.42g` | CO2 for the current session |
+| `Session: 0.42g` | CO₂ for the current session |
 | `/ 12.35g CO₂` | All-time total for this project |
 | `org_repo_a1b2c3d4` | Project identifier (hidden for local-only projects) |
 | `Curious Penguin` | Your display name (shown when sync is enabled) |
@@ -133,7 +133,7 @@ The session value starts as a live estimate from context window tokens, then swi
 The plugin uses Claude Code [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to track usage automatically:
 
 - **SessionStart** — installs dependencies if needed, initializes the database, and batch-syncs any pending sessions
-- **Stop** — parses the session transcript, calculates energy and CO2, and saves to the local SQLite database. An async background sync runs if enabled (15s timeout, non-blocking).
+- **Stop** — parses the session transcript, calculates energy and CO₂, and saves to the local SQLite database. An async background sync runs if enabled (15s timeout, non-blocking).
 
 ### Carbon Calculation
 
@@ -141,7 +141,7 @@ Calculations use the [Jegham et al.](https://arxiv.org/abs/2505.09598) methodolo
 
 ```
 Energy (Wh)  = (TTFT + outputTokens / TPS) × (GPU_power × util + nonGPU_power × util) × PUE
-CO2 (g)      = Energy (Wh) × CIF
+CO₂ (g)      = Energy (Wh) × CIF
 ```
 
 Per-model configs (Haiku, Sonnet, Opus) capture GPU power draw, utilization bounds, datacenter PUE, and carbon intensity factor. Each API request incurs its own TTFT cost for accurate per-request accounting.
@@ -161,7 +161,7 @@ The hash is the first 8 characters of SHA-256 of the project path, ensuring uniq
 When anonymous sync is enabled, the following metrics are sent to CNaught's API:
 
 - Token counts (input, output, cache creation, cache read)
-- Energy consumption (Wh) and CO2 emissions (g)
+- Energy consumption (Wh) and CO₂ emissions (g)
 - Model used and session timestamps
 - Project identifier and display name
 
