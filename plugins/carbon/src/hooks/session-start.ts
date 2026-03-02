@@ -8,11 +8,16 @@
 
 import '../utils/load-env';
 
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { z } from 'zod';
 
-import { withDatabase } from '../data-store';
+import { getClaudeDir, withDatabase } from '../data-store';
+import { updateStatuslinePath } from '../scripts/setup-helpers';
 import { batchSyncIfEnabled } from '../sync';
 import { log, logError, readStdinJson, runHook, SessionStartInputSchema } from '../utils/stdin';
+
+const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 async function main(): Promise<void> {
     try {
@@ -30,6 +35,16 @@ async function main(): Promise<void> {
         withDatabase(() => {
             log('Database initialized');
         });
+
+        // Update statusline path if plugin root has changed (e.g., after version update)
+        try {
+            const settingsPath = path.join(getClaudeDir(), 'settings.json');
+            if (updateStatuslinePath(settingsPath, pluginRoot)) {
+                log('Updated statusline path to current plugin version');
+            }
+        } catch {
+            // Non-critical
+        }
 
         // Batch sync any sessions that failed to sync previously
         await batchSyncIfEnabled();
