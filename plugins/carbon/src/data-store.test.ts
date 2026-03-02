@@ -20,6 +20,7 @@ import {
     getUnsyncedSessions,
     initializeDatabase,
     MIGRATIONS,
+    markSessionSyncFailed,
     markSessionsSynced,
     sessionExists,
     setConfig,
@@ -564,7 +565,7 @@ describe('getConfig / setConfig / deleteConfig', () => {
 });
 
 describe('getUnsyncedSessions / markSessionsSynced', () => {
-    it('new sessions default to needs_sync = 1', () => {
+    it('new sessions default to sync_status pending', () => {
         const db = createTestDb();
         upsertSession(db, makeSession({ sessionId: 's1' }));
         upsertSession(db, makeSession({ sessionId: 's2' }));
@@ -572,10 +573,13 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(2);
         expect(unsynced.map((s) => s.sessionId).sort()).toEqual(['s1', 's2']);
+
+        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        expect(row.sync_status).toBe('pending');
         db.close();
     });
 
-    it('markSessionsSynced clears needs_sync flag', () => {
+    it('markSessionsSynced sets sync_status to synced', () => {
         const db = createTestDb();
         upsertSession(db, makeSession({ sessionId: 's1' }));
         upsertSession(db, makeSession({ sessionId: 's2' }));
@@ -586,6 +590,20 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(1);
         expect(unsynced[0].sessionId).toBe('s2');
+
+        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        expect(row.sync_status).toBe('synced');
+        db.close();
+    });
+
+    it('markSessionSyncFailed sets sync_status to failed', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+
+        markSessionSyncFailed(db, ['s1']);
+
+        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        expect(row.sync_status).toBe('failed');
         db.close();
     });
 
@@ -610,7 +628,7 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         db.close();
     });
 
-    it('upserting a synced session resets needs_sync to 1', () => {
+    it('upserting a synced session transitions sync_status to dirty', () => {
         const db = createTestDb();
         upsertSession(db, makeSession({ sessionId: 's1' }));
         markSessionsSynced(db, ['s1']);
@@ -621,6 +639,32 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(1);
         expect(unsynced[0].sessionId).toBe('s1');
+
+        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        expect(row.sync_status).toBe('dirty');
+        db.close();
+    });
+
+    it('upserting a failed session transitions sync_status to dirty', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+        markSessionSyncFailed(db, ['s1']);
+
+        upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
+
+        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        expect(row.sync_status).toBe('dirty');
+        db.close();
+    });
+
+    it('upserting a pending session keeps sync_status as pending', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: 's1' }));
+
+        upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
+
+        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        expect(row.sync_status).toBe('pending');
         db.close();
     });
 });
@@ -673,22 +717,21 @@ describe('getProjectConfig / setProjectConfig / deleteProjectConfig', () => {
     });
 });
 
-describe('configureSyncTracking needs_sync behavior', () => {
-    it('first sync enable without backfill clears needs_sync on existing sessions', () => {
+describe('configureSyncTracking sync_status behavior', () => {
+    it('first sync enable without backfill marks existing sessions as synced', () => {
         const db = createTestDb();
         // Simulate existing sessions before sync is enabled
         upsertSession(db, makeSession({ sessionId: 's1' }));
         upsertSession(db, makeSession({ sessionId: 's2' }));
 
-        // Verify they start with needs_sync = 1
+        // Verify they start as pending
         expect(getUnsyncedSessions(db, 100)).toHaveLength(2);
 
-        // Simulate first-time sync enable without backfill:
-        // configureSyncTracking sets sync_enabled and clears needs_sync
+        // Simulate first-time sync enable without backfill
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'test-user-id');
         setConfig(db, 'claude_code_user_name', 'Test User');
-        db.exec('UPDATE sessions SET needs_sync = 0 WHERE needs_sync = 1');
+        db.exec("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
 
         // Existing sessions should no longer need sync
         expect(getUnsyncedSessions(db, 100)).toHaveLength(0);
@@ -701,24 +744,22 @@ describe('configureSyncTracking needs_sync behavior', () => {
         db.close();
     });
 
-    it('re-enabling sync preserves needs_sync on pending sessions', () => {
+    it('re-enabling sync preserves sync_status on pending sessions', () => {
         const db = createTestDb();
         // Simulate already-configured sync
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'existing-user-id');
         setConfig(db, 'claude_code_user_name', 'Existing User');
 
-        // Add sessions that failed to sync (still needs_sync = 1)
+        // Add sessions that haven't synced yet
         upsertSession(db, makeSession({ sessionId: 's1' }));
         upsertSession(db, makeSession({ sessionId: 's2' }));
 
-        // Re-running setup should NOT clear needs_sync because
+        // Re-running setup should NOT clear pending sessions because
         // existingUserId is already set (isFirstEnable = false)
         const existingUserId = getConfig(db, 'claude_code_user_id');
         expect(existingUserId).not.toBeNull();
 
-        // The code only clears needs_sync when isFirstEnable && !shouldBackfill,
-        // so re-enable should leave pending sessions alone
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(2);
         db.close();

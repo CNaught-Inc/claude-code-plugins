@@ -39,13 +39,15 @@ function getSyncInfo(): { enabled: boolean; userName: string | null; userId: str
     );
 }
 
-function getSessionSynced(sessionId: string): boolean | null {
+type SyncStatus = 'pending' | 'dirty' | 'synced' | 'failed';
+
+function getSessionSyncStatus(sessionId: string): SyncStatus | null {
     return queryReadonlyDb((db) => {
         const row = db
-            .prepare('SELECT needs_sync FROM sessions WHERE session_id = ?')
-            .get(sessionId) as { needs_sync: number } | undefined;
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get(sessionId) as { sync_status: SyncStatus } | undefined;
         if (row === undefined) return null;
-        return row.needs_sync === 0;
+        return row.sync_status;
     });
 }
 
@@ -145,15 +147,16 @@ export function getCarbonOutput(input: StatuslineInput): string {
     let syncSuffix = '';
     const syncInfo = getSyncInfo();
     if (syncInfo.enabled && syncInfo.userName && syncInfo.userId) {
-        const synced = input.session_id ? getSessionSynced(input.session_id) : null;
-        const green = '\x1b[38;2;193;215;199m';   // Brand green #C1D7C7
+        const syncStatus = input.session_id ? getSessionSyncStatus(input.session_id) : null;
+        const green = '\x1b[38;2;50;205;50m';      // Lime green #32CD32
         const red = '\x1b[38;2;208;83;63m';       // Brand orange #D0533F
         // ⇄ text-based sync arrows respond to ANSI coloring
-        if (synced === true) {
+        if (syncStatus === 'synced' || syncStatus === 'dirty') {
             syncSuffix = ` ${green}\u21C4${reset}`;
-        } else if (synced === false) {
+        } else if (syncStatus === 'failed') {
             syncSuffix = ` ${red}\u21C4${reset}`;
         }
+        // pending → no icon (never synced yet)
     }
 
     return `Climate Impact: ${co2Str} \u00b7 ${energyStr}${syncSuffix}`;

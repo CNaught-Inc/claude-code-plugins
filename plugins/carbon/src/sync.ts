@@ -15,6 +15,7 @@ import {
     getSession,
     getUnsyncedSessions,
     initializeDatabase,
+    markSessionSyncFailed,
     markSessionsSynced,
     openDatabase
 } from './data-store';
@@ -37,7 +38,7 @@ export function getSyncConfig(db: Database): SyncConfig | null {
 }
 
 /**
- * Sync a single session to the API and clear its needs_sync flag on success.
+ * Sync a single session to the API. Sets sync_status to synced/failed.
  */
 export async function syncSession(db: Database, sessionId: string): Promise<void> {
     const config = getSyncConfig(db);
@@ -49,6 +50,8 @@ export async function syncSession(db: Database, sessionId: string): Promise<void
     const success = await upsertSession(config, session);
     if (success) {
         markSessionsSynced(db, [sessionId]);
+    } else {
+        markSessionSyncFailed(db, [sessionId]);
     }
 }
 
@@ -67,13 +70,12 @@ export async function syncUnsyncedSessions(db: Database): Promise<number> {
         if (batch.length === 0) break;
 
         const success = await upsertSessions(config, batch);
+        const batchIds = batch.map((s) => s.sessionId);
         if (success) {
-            markSessionsSynced(
-                db,
-                batch.map((s) => s.sessionId)
-            );
+            markSessionsSynced(db, batchIds);
             totalSynced += batch.length;
         } else {
+            markSessionSyncFailed(db, batchIds);
             // Stop on failure — will retry on next session start
             break;
         }

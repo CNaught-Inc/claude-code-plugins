@@ -51,7 +51,7 @@ function main(): void {
             // Update all sessions with the old identifier to the new one
             const result = db
                 .prepare(
-                    'UPDATE sessions SET project_identifier = ?, needs_sync = 1 WHERE project_identifier = ?'
+                    "UPDATE sessions SET project_identifier = ?, sync_status = CASE WHEN sync_status IN ('synced', 'failed') THEN 'dirty' ELSE sync_status END WHERE project_identifier = ?"
                 )
                 .run(newIdentifier, oldIdentifier);
 

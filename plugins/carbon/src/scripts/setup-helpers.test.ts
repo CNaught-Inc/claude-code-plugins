@@ -494,5 +494,5 @@ describe('configureSettings', () => {
     });
 });
 
-// Sync behavior tests (configureSyncTracking needs_sync logic) are in data-store.test.ts
+// Sync behavior tests (configureSyncTracking sync_status logic) are in data-store.test.ts
 // because they import from data-store which conflicts with the mock in carbon-output.test.ts.
