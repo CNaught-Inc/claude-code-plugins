@@ -133,7 +133,7 @@ async function configureSyncTracking(
         } else if (isFirstEnable) {
             // First time enabling sync without backfill: mark existing sessions
             // as already synced so only new sessions going forward get synced.
-            db.exec('UPDATE sessions SET needs_sync = 0 WHERE needs_sync = 1');
+            db.exec("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
             console.log('  Existing sessions marked as synced (not backfilling)');
         }
     } finally {

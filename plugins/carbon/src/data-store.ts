@@ -201,6 +201,21 @@ export const MIGRATIONS: Migration[] = [
                 db.exec("ALTER TABLE sessions ADD COLUMN models_used TEXT NOT NULL DEFAULT '{}'");
             }
         }
+    },
+    {
+        version: 5,
+        description: 'Replace needs_sync flag with sync_status state machine',
+        up: (db) => {
+            if (!columnExists(db, 'sessions', 'sync_status')) {
+                db.exec("ALTER TABLE sessions ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'");
+                // Migrate existing data: needs_sync=0 → synced, needs_sync=1 → pending
+                db.exec("UPDATE sessions SET sync_status = 'synced' WHERE needs_sync = 0");
+                db.exec("UPDATE sessions SET sync_status = 'pending' WHERE needs_sync = 1");
+            }
+            if (columnExists(db, 'sessions', 'needs_sync')) {
+                db.exec('ALTER TABLE sessions DROP COLUMN needs_sync');
+            }
+        }
     }
 ];
 
@@ -277,12 +292,12 @@ export function upsertSession(db: Database, session: SessionRecord): void {
             session_id, project_path, project_identifier, input_tokens, output_tokens,
             cache_creation_tokens, cache_read_tokens, total_tokens,
             energy_wh, co2_grams, primary_model, models_used, created_at, updated_at,
-            needs_sync
+            sync_status
         ) VALUES (
             $sessionId, $projectPath, $projectIdentifier, $inputTokens, $outputTokens,
             $cacheCreationTokens, $cacheReadTokens, $totalTokens,
             $energyWh, $co2Grams, $primaryModel, $modelsUsed, $createdAt, $updatedAt,
-            1
+            'pending'
         )
         ON CONFLICT(session_id) DO UPDATE SET
             project_path = excluded.project_path,
@@ -297,7 +312,10 @@ export function upsertSession(db: Database, session: SessionRecord): void {
             primary_model = excluded.primary_model,
             models_used = excluded.models_used,
             updated_at = excluded.updated_at,
-            needs_sync = 1
+            sync_status = CASE
+                WHEN sessions.sync_status IN ('synced', 'failed') THEN 'dirty'
+                ELSE sessions.sync_status
+            END
     `);
 
     stmt.run({
@@ -491,20 +509,31 @@ export function deleteProjectConfig(db: Database, projectHash: string, key: stri
  * Get sessions that need syncing to the API
  */
 export function getUnsyncedSessions(db: Database, limit: number = 100): SessionRecord[] {
-    const stmt = db.prepare('SELECT * FROM sessions WHERE needs_sync = 1 LIMIT ?');
+    const stmt = db.prepare("SELECT * FROM sessions WHERE sync_status != 'synced' LIMIT ?");
     const rows = stmt.all(limit) as Record<string, unknown>[];
     return rows.map(rowToSession);
 }
 
 /**
- * Mark sessions as synced (clear the needs_sync flag)
+ * Mark sessions as synced
  */
 export function markSessionsSynced(db: Database, sessionIds: string[]): void {
     if (sessionIds.length === 0) return;
     const placeholders = sessionIds.map(() => '?').join(', ');
-    db.prepare(`UPDATE sessions SET needs_sync = 0 WHERE session_id IN (${placeholders})`).run(
-        ...sessionIds
-    );
+    db.prepare(
+        `UPDATE sessions SET sync_status = 'synced' WHERE session_id IN (${placeholders})`
+    ).run(...sessionIds);
+}
+
+/**
+ * Mark sessions as failed to sync
+ */
+export function markSessionSyncFailed(db: Database, sessionIds: string[]): void {
+    if (sessionIds.length === 0) return;
+    const placeholders = sessionIds.map(() => '?').join(', ');
+    db.prepare(
+        `UPDATE sessions SET sync_status = 'failed' WHERE session_id IN (${placeholders})`
+    ).run(...sessionIds);
 }
 
 /**

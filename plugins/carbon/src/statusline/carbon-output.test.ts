@@ -177,12 +177,7 @@ describe('getCarbonOutput', () => {
 });
 
 describe('getCarbonOutput sync display', () => {
-    it('shows sync arrows when sync is enabled and synced', () => {
-        // Call 1: getSessionStatsFromDb returns {co2: 1g, energy: 0.3Wh}
-        // Call 2: getTotalCO2FromDb returns null
-        // Call 3: getTotalEnergyFromDb returns null
-        // Call 4: getSyncInfo returns enabled config
-        // Call 5: getSessionSynced returns true
+    it('shows green arrows when sync_status is synced', () => {
         mockQueryReadonlyDb
             .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
             .mockReturnValueOnce(null)
@@ -192,16 +187,33 @@ describe('getCarbonOutput sync display', () => {
                 userName: 'Curious Penguin',
                 userId: 'abcd1234-5678'
             })
-            .mockReturnValueOnce(true);
+            .mockReturnValueOnce('synced');
 
         const result = getCarbonOutput({ session_id: 'test-session' });
 
-        // Green ⇄ arrows for synced
         expect(result).toContain('\u21C4');
-        expect(result).toContain('\x1b[38;2;193;215;199m'); // brand green
+        expect(result).toContain('\x1b[38;2;50;205;50m'); // lime green
     });
 
-    it('shows red arrows when session is not synced', () => {
+    it('shows green arrows when sync_status is dirty', () => {
+        mockQueryReadonlyDb
+            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
+            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(null)
+            .mockReturnValueOnce({
+                enabled: true,
+                userName: 'Curious Penguin',
+                userId: 'abcd1234-5678'
+            })
+            .mockReturnValueOnce('dirty');
+
+        const result = getCarbonOutput({ session_id: 'test-session' });
+
+        expect(result).toContain('\u21C4');
+        expect(result).toContain('\x1b[38;2;50;205;50m'); // lime green
+    });
+
+    it('shows red arrows when sync_status is failed', () => {
         mockQueryReadonlyDb
             .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
             .mockReturnValueOnce(null)
@@ -211,13 +223,29 @@ describe('getCarbonOutput sync display', () => {
                 userName: 'Swift Falcon',
                 userId: 'efgh5678-9012'
             })
-            .mockReturnValueOnce(false);
+            .mockReturnValueOnce('failed');
 
         const result = getCarbonOutput({ session_id: 'test-session' });
 
-        // Red ⇄ arrows for not synced
         expect(result).toContain('\u21C4');
         expect(result).toContain('\x1b[38;2;208;83;63m'); // brand orange
+    });
+
+    it('shows no arrows when sync_status is pending', () => {
+        mockQueryReadonlyDb
+            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
+            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(null)
+            .mockReturnValueOnce({
+                enabled: true,
+                userName: 'Swift Falcon',
+                userId: 'efgh5678-9012'
+            })
+            .mockReturnValueOnce('pending');
+
+        const result = getCarbonOutput({ session_id: 'test-session' });
+
+        expect(result).not.toContain('\u21C4');
     });
 
     it('does not show sync info when sync is disabled', () => {
@@ -257,7 +285,7 @@ describe('getCarbonOutput sync display', () => {
             }
         });
 
-        // No session_id means getSessionSynced not called, so no arrows
+        // No session_id means getSessionSyncStatus not called, so no arrows
         expect(result).not.toContain('\u21C4');
     });
 
