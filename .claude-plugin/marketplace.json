@@ -10,6 +10,11 @@
       "name": "carbon",
       "description": "Track and offset carbon emissions from your Claude Code usage",
       "source": "./plugins/carbon"
+    },
+    {
+      "name": "parsimony",
+      "description": "Token efficiency skill that reduces controllable token usage by ~30% and speeds up responses by ~48% without sacrificing output quality",
+      "source": "./plugins/parsimony"
     }
   ]
 }
