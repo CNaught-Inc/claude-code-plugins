@@ -132,7 +132,7 @@ The session value starts as a live estimate from context window tokens, then swi
 
 The plugin uses Claude Code [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to track usage automatically:
 
-- **SessionStart** — installs dependencies if needed, initializes the database, and batch-syncs any pending sessions
+- **SessionStart** — installs dependencies if needed, initializes the database, auto-updates the statusline path if the plugin version changed, and batch-syncs any pending sessions
 - **Stop** — parses the session transcript, calculates energy and CO₂, and saves to the local SQLite database. An async background sync runs if enabled (15s timeout, non-blocking).
 
 ### Carbon Calculation

@@ -203,6 +203,53 @@ export function cleanupAllInstallations(claudeDir: string): void {
     }
 }
 
+// -- updateStatuslinePath --
+
+/**
+ * Update the carbon statusline command in settings.json if the plugin root has changed.
+ *
+ * The statusline command is stored as an absolute path in settings.json (unlike hooks,
+ * which use $CLAUDE_PLUGIN_ROOT). When the plugin updates to a new version, the cached
+ * path changes but settings.json still points to the old one. This function detects
+ * that mismatch and rewrites the command with the current plugin root.
+ *
+ * Should be called from the session-start hook, which has access to the current plugin root.
+ */
+export function updateStatuslinePath(settingsPath: string, pluginRoot: string): boolean {
+    try {
+        if (!fs.existsSync(settingsPath)) return false;
+
+        const content = fs.readFileSync(settingsPath, 'utf-8');
+        const settings = JSON.parse(content) as Record<string, unknown>;
+
+        const statusLine = settings.statusLine as { type?: string; command?: string } | undefined;
+        if (!statusLine?.command || !isCarbonStatusLine(statusLine.command)) return false;
+
+        const standaloneScript = path.join(pluginRoot, 'src', 'statusline', 'carbon-statusline.ts');
+        const wrapperScript = path.join(pluginRoot, 'src', 'statusline', 'statusline-wrapper.ts');
+
+        // Already up to date?
+        if (statusLine.command.includes(pluginRoot)) return false;
+
+        let newCommand: string;
+        if (statusLine.command.includes('statusline-wrapper')) {
+            // Wrapper mode: preserve --original-command arg
+            const match = statusLine.command.match(/--original-command\s+"([^"]+)"/);
+            const originalCommand = match?.[1] ?? '';
+            newCommand = `npx -y bun ${wrapperScript} --original-command "${originalCommand}"`;
+        } else {
+            // Standalone mode
+            newCommand = `npx -y bun ${standaloneScript}`;
+        }
+
+        settings.statusLine = { ...statusLine, command: newCommand };
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 // -- configureSettings --
 
 export interface ConfigureSettingsOptions {

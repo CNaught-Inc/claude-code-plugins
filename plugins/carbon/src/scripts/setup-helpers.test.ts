@@ -8,7 +8,8 @@ import {
     configureSettings,
     convertToUserScope,
     getInstalledPluginEntries,
-    isCarbonStatusLine
+    isCarbonStatusLine,
+    updateStatuslinePath
 } from './setup-helpers';
 
 describe('isCarbonStatusLine', () => {
@@ -491,6 +492,118 @@ describe('configureSettings', () => {
         expect(settings.permissions).toEqual({ allow: ['Bash(git:*)'] });
         expect(settings.enabledPlugins).toEqual({ 'carbon@cnaught-plugins': true });
         expect(settings.statusLine).toBeDefined();
+    });
+});
+
+describe('updateStatuslinePath', () => {
+    let tmpDir: string;
+    let settingsPath: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon-test-'));
+        settingsPath = path.join(tmpDir, 'settings.json');
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('updates stale standalone statusline path', () => {
+        fs.writeFileSync(
+            settingsPath,
+            JSON.stringify({
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /old/cache/carbon/2.4.0/src/statusline/carbon-statusline.ts'
+                }
+            })
+        );
+
+        const newRoot = '/new/cache/carbon/2.4.1';
+        const updated = updateStatuslinePath(settingsPath, newRoot);
+
+        expect(updated).toBe(true);
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        expect(settings.statusLine.command).toBe(
+            `npx -y bun ${newRoot}/src/statusline/carbon-statusline.ts`
+        );
+        expect(settings.statusLine.type).toBe('command');
+    });
+
+    it('updates stale wrapper statusline path preserving original command', () => {
+        fs.writeFileSync(
+            settingsPath,
+            JSON.stringify({
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /old/cache/carbon/2.4.0/src/statusline/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"'
+                }
+            })
+        );
+
+        const newRoot = '/new/cache/carbon/2.4.1';
+        const updated = updateStatuslinePath(settingsPath, newRoot);
+
+        expect(updated).toBe(true);
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        expect(settings.statusLine.command).toBe(
+            `npx -y bun ${newRoot}/src/statusline/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"`
+        );
+    });
+
+    it('returns false when path already matches', () => {
+        const currentRoot = '/current/cache/carbon/2.4.1';
+        fs.writeFileSync(
+            settingsPath,
+            JSON.stringify({
+                statusLine: {
+                    type: 'command',
+                    command: `npx -y bun ${currentRoot}/src/statusline/carbon-statusline.ts`
+                }
+            })
+        );
+
+        const updated = updateStatuslinePath(settingsPath, currentRoot);
+
+        expect(updated).toBe(false);
+    });
+
+    it('returns false when statusline is not carbon', () => {
+        fs.writeFileSync(
+            settingsPath,
+            JSON.stringify({
+                statusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
+            })
+        );
+
+        const updated = updateStatuslinePath(settingsPath, '/some/path');
+
+        expect(updated).toBe(false);
+    });
+
+    it('returns false when settings file does not exist', () => {
+        const updated = updateStatuslinePath('/nonexistent/settings.json', '/some/path');
+        expect(updated).toBe(false);
+    });
+
+    it('preserves other settings keys', () => {
+        fs.writeFileSync(
+            settingsPath,
+            JSON.stringify({
+                permissions: { allow: ['Bash(git:*)'] },
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /old/path/src/statusline/carbon-statusline.ts'
+                },
+                _carbonOriginalStatusLine: { type: 'command', command: 'bunx ccstatusline@latest' }
+            })
+        );
+
+        updateStatuslinePath(settingsPath, '/new/path');
+
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        expect(settings.permissions).toEqual({ allow: ['Bash(git:*)'] });
+        expect(settings._carbonOriginalStatusLine).toEqual({ type: 'command', command: 'bunx ccstatusline@latest' });
     });
 });
 
