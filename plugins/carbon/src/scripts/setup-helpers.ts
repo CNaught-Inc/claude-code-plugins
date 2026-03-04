@@ -139,7 +139,10 @@ export function convertToUserScope(claudeDir: string): void {
     try {
         if (!fs.existsSync(installedPluginsPath)) return;
         const content = fs.readFileSync(installedPluginsPath, 'utf-8');
-        const data = JSON.parse(content) as { version?: number; plugins: Record<string, InstalledPluginEntry[]> };
+        const data = JSON.parse(content) as {
+            version?: number;
+            plugins: Record<string, InstalledPluginEntry[]>;
+        };
 
         const existingEntries = data.plugins[PLUGIN_ID] ?? [];
         const userEntry = existingEntries.find((e) => e.scope === 'user');

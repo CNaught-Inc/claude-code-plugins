@@ -13,7 +13,7 @@
 
 import '../utils/load-env';
 
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 
 import { deleteConfig, getDatabasePath, initializeDatabase, openDatabase } from '../data-store';
 import { resolveProjectIdentifier } from '../project-identifier';
@@ -42,7 +42,9 @@ function deleteSessions(projectPath?: string): { deleted: number; remaining: num
         const projectIdentifier = resolveProjectIdentifier(projectPath);
         const encodedPath = projectPath.replace(/\//g, '-');
         const deleteResult = db
-            .prepare('DELETE FROM sessions WHERE project_identifier = ? OR project_path = ? OR project_path = ?')
+            .prepare(
+                'DELETE FROM sessions WHERE project_identifier = ? OR project_path = ? OR project_path = ?'
+            )
             .run(projectIdentifier, encodedPath, projectPath);
         const deleted = deleteResult.changes;
 

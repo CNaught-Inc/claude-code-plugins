@@ -14,15 +14,12 @@ import { syncSessionIfEnabled } from '../sync';
 import { log, readStdinJson, runHook, StopInputSchema } from '../utils/stdin';
 
 async function main(): Promise<void> {
-    let input;
     try {
-        input = await readStdinJson(StopInputSchema);
+        const input = await readStdinJson(StopInputSchema);
+        await syncSessionIfEnabled(input.session_id);
     } catch {
         log('No input received, skipping sync');
-        return;
     }
-
-    await syncSessionIfEnabled(input.session_id);
 }
 
 runHook(main);

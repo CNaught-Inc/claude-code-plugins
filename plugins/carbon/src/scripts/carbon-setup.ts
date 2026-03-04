@@ -9,7 +9,7 @@
 
 import '../utils/load-env';
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
 
@@ -27,8 +27,7 @@ import {
     setProjectConfig,
     withDatabase
 } from '../data-store';
-import { shortHash } from '../project-identifier';
-import { resolveProjectIdentifier } from '../project-identifier';
+import { resolveProjectIdentifier, shortHash } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
 import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
@@ -43,7 +42,6 @@ function getPluginRoot(): string {
     // __dirname is src/scripts/, plugin root is two levels up
     return path.resolve(__dirname, '..', '..');
 }
-
 
 /**
  * Backfill historical sessions from transcript files on disk across all projects.
@@ -133,7 +131,7 @@ async function configureSyncTracking(
         } else if (isFirstEnable) {
             // First time enabling sync without backfill: mark existing sessions
             // as already synced so only new sessions going forward get synced.
-            db.exec("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
+            db.run("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
             console.log('  Existing sessions marked as synced (not backfilling)');
         }
     } finally {
@@ -150,7 +148,8 @@ async function main(): Promise<void> {
     const userNameIndex = process.argv.indexOf('--user-name');
     const customUserName = userNameIndex !== -1 ? process.argv[userNameIndex + 1] || null : null;
     const projectNameIndex = process.argv.indexOf('--project-name');
-    const customProjectName = projectNameIndex !== -1 ? process.argv[projectNameIndex + 1] || null : null;
+    const customProjectName =
+        projectNameIndex !== -1 ? process.argv[projectNameIndex + 1] || null : null;
     console.log('\n');
     console.log('========================================');
     console.log('  CNaught Carbon Tracker Setup         ');

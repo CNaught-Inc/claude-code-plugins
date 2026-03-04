@@ -8,7 +8,7 @@
  *   statusline-wrapper.js --original-command "npx ccstatusline@latest"
  *
  * Input: JSON via stdin (from Claude Code, same as carbon-statusline)
- * Output: "<original output> | 🌱 session: 2.45g CO₂"
+ * Output: "<original output> | <carbon output>", joined with ' | '
  */
 
 import '../utils/load-env';

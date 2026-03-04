@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
 // Mock data-store to control DB responses
-const mockQueryReadonlyDb = mock((fn: any): any => null);
+// biome-ignore lint/suspicious/noExplicitAny: Used to mock different return types
+const mockQueryReadonlyDb = mock((): any => null);
 
 mock.module('../data-store.js', () => ({
     queryReadonlyDb: mockQueryReadonlyDb
 }));
 
 mock.module('../project-identifier.js', () => ({
-    resolveProjectIdentifier: (p: string) => `test_project_abcd1234`
+    resolveProjectIdentifier: () => `test_project_abcd1234`
 }));
 
 const { getCarbonOutput } = await import('./carbon-output');
@@ -112,10 +113,7 @@ describe('getCarbonOutput', () => {
         // Call 1: getTotalCO2FromDb returns 5g
         // Call 2: getTotalEnergyFromDb returns 2
         // Call 3: getSyncInfo returns null
-        mockQueryReadonlyDb
-            .mockReturnValueOnce(5)
-            .mockReturnValueOnce(2)
-            .mockReturnValueOnce(null);
+        mockQueryReadonlyDb.mockReturnValueOnce(5).mockReturnValueOnce(2).mockReturnValueOnce(null);
 
         const result = getCarbonOutput({
             cwd: '/my/project',
@@ -265,14 +263,11 @@ describe('getCarbonOutput sync display', () => {
         // Call 1: getTotalCO2FromDb returns 5g
         // Call 2: getTotalEnergyFromDb returns 2
         // Call 3: getSyncInfo returns enabled
-        mockQueryReadonlyDb
-            .mockReturnValueOnce(5)
-            .mockReturnValueOnce(2)
-            .mockReturnValueOnce({
-                enabled: true,
-                userName: 'Curious Penguin',
-                userId: 'abcd1234-5678'
-            });
+        mockQueryReadonlyDb.mockReturnValueOnce(5).mockReturnValueOnce(2).mockReturnValueOnce({
+            enabled: true,
+            userName: 'Curious Penguin',
+            userId: 'abcd1234-5678'
+        });
 
         const result = getCarbonOutput({
             cwd: '/my/project',

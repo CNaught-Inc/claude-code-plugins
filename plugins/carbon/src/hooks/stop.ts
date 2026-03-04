@@ -12,6 +12,8 @@
 
 import '../utils/load-env';
 
+import type { z } from 'zod';
+
 import { calculateSessionCarbon } from '../carbon-calculator';
 import { withDatabase } from '../data-store';
 import { saveSessionToDb } from '../session-db';
@@ -21,7 +23,7 @@ import { log, logError, readStdinJson, runHook, StopInputSchema } from '../utils
 async function main(): Promise<void> {
     try {
         // Read input from stdin
-        let input;
+        let input: Awaited<z.infer<typeof StopInputSchema>>;
         try {
             input = await readStdinJson(StopInputSchema);
         } catch {
@@ -34,7 +36,7 @@ async function main(): Promise<void> {
 
         // Find the transcript file
         const actualTranscriptPath =
-            transcript_path || findTranscriptPath(session_id, project_path);
+            transcript_path ?? findTranscriptPath(session_id, project_path);
 
         if (!actualTranscriptPath) {
             log(`No transcript found for session ${session_id}`);
