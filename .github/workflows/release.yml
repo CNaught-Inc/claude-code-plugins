@@ -52,12 +52,15 @@ jobs:
           for plugin_json in plugins/*/.claude-plugin/plugin.json; do
             jq --arg v "$VERSION" '.version = $v' "$plugin_json" > tmp.json && mv tmp.json "$plugin_json"
           done
+          for pkg_json in plugins/*/package.json; do
+            jq --arg v "$VERSION" '.version = $v' "$pkg_json" > tmp.json && mv tmp.json "$pkg_json"
+          done
 
       - name: Commit and tag release
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add plugins/*/.claude-plugin/plugin.json
+          git add plugins/*/.claude-plugin/plugin.json plugins/*/package.json
           git commit --no-verify -m "chore: release ${{ inputs.version }} [skip ci]"
           git tag "v${{ inputs.version }}"
           git push origin main --tags
