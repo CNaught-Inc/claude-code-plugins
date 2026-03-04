@@ -12,11 +12,19 @@ import '../utils/load-env';
 import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
 
 import { getConfig, initializeDatabase, openDatabase, setConfig } from '../data-store';
+import { getArgValue, validateName } from '../utils/args';
 import { logError } from '../utils/stdin';
 
 function main(): void {
-    const nameIndex = process.argv.indexOf('--name');
-    const newName = nameIndex !== -1 ? process.argv[nameIndex + 1] : null;
+    const newName = getArgValue('--name');
+
+    if (newName !== null) {
+        const error = validateName(newName);
+        if (error) {
+            console.error(`Display name: ${error}`);
+            process.exit(1);
+        }
+    }
 
     const db = openDatabase();
     try {

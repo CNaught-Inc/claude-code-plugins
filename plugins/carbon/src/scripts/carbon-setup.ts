@@ -31,6 +31,7 @@ import { resolveProjectIdentifier, shortHash } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
 import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
+import { getArgValue, hasFlag, validateName } from '../utils/args';
 import { generateMachineUserId } from '../utils/machine-id';
 import { logError } from '../utils/stdin';
 import { configureSettings, convertToUserScope } from './setup-helpers';
@@ -143,13 +144,24 @@ async function configureSyncTracking(
  * Main setup flow
  */
 async function main(): Promise<void> {
-    const shouldBackfill = process.argv.includes('--backfill');
-    const shouldEnableSync = !process.argv.includes('--disable-sync');
-    const userNameIndex = process.argv.indexOf('--user-name');
-    const customUserName = userNameIndex !== -1 ? process.argv[userNameIndex + 1] || null : null;
-    const projectNameIndex = process.argv.indexOf('--project-name');
-    const customProjectName =
-        projectNameIndex !== -1 ? process.argv[projectNameIndex + 1] || null : null;
+    const shouldBackfill = hasFlag('--backfill');
+    const shouldEnableSync = !hasFlag('--disable-sync');
+    const customUserName = getArgValue('--user-name');
+    const customProjectName = getArgValue('--project-name');
+
+    // Validate names if provided
+    for (const [label, name, maxLen] of [
+        ['User name', customUserName, 50],
+        ['Project name', customProjectName, 100]
+    ] as const) {
+        if (name !== null) {
+            const error = validateName(name, maxLen);
+            if (error) {
+                console.error(`${label}: ${error}`);
+                process.exit(1);
+            }
+        }
+    }
     console.log('\n');
     console.log('========================================');
     console.log('  CNaught Carbon Tracker Setup         ');
