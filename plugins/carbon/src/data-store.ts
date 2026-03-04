@@ -241,9 +241,12 @@ function runMigrations(db: Database): void {
     for (let i = currentVersion; i < MIGRATIONS.length; i++) {
         const migration = MIGRATIONS[i];
         try {
+            db.exec('BEGIN');
             migration.up(db);
             db.exec(`PRAGMA user_version = ${migration.version}`);
+            db.exec('COMMIT');
         } catch (error) {
+            db.exec('ROLLBACK');
             logError(`Migration v${migration.version} failed: ${migration.description}`, error);
             return;
         }
