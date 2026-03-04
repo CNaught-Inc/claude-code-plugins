@@ -33,7 +33,6 @@ Then clean up global settings:
 1. In `~/.claude/settings.json`: apply the same statusLine cleanup logic (restore original or remove carbon statusline). Remove `"carbon@cnaught-plugins"` from `enabledPlugins`.
 2. In `~/.claude/settings.local.json`: remove `"carbon@cnaught-plugins"` from `enabledPlugins` if present.
 3. Remove all `carbon@cnaught-plugins` entries from `~/.claude/plugins/installed_plugins.json`.
-4. Delete `~/.claude/statusline-carbon.mjs` if it exists (legacy file).
 
 ### Step 4: Confirm completion
 

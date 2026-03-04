@@ -19,12 +19,20 @@ import {
     setProjectConfig
 } from '../data-store';
 import { resolveProjectIdentifier, shortHash } from '../project-identifier';
+import { getArgValue, hasFlag, validateName } from '../utils/args';
 import { logError } from '../utils/stdin';
 
 function main(): void {
-    const nameIndex = process.argv.indexOf('--name');
-    const newName = nameIndex !== -1 ? process.argv[nameIndex + 1] : null;
-    const shouldReset = process.argv.includes('--reset');
+    const newName = getArgValue('--name');
+    const shouldReset = hasFlag('--reset');
+
+    if (newName !== null) {
+        const error = validateName(newName, 100);
+        if (error) {
+            console.error(`Project name: ${error}`);
+            process.exit(1);
+        }
+    }
 
     const db = openDatabase();
     try {

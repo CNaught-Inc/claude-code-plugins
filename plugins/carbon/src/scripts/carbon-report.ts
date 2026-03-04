@@ -15,7 +15,6 @@ import {
     getUnsyncedSessions,
     withDatabase
 } from '../data-store';
-import { resolveProjectIdentifier } from '../project-identifier';
 import { logError } from '../utils/stdin';
 
 // ── ANSI helpers ──────────────────────────────────────────────
@@ -79,9 +78,8 @@ interface ModelStats {
     tokens: number;
 }
 
-function getModelStats(projectIdentifier?: string): ModelStats[] {
+function getModelStats(): ModelStats[] {
     return withDatabase((db) => {
-        const projectFilter = projectIdentifier ? 'WHERE project_identifier = ?' : '';
         const stmt = db.prepare(`
             SELECT
                 primary_model as model,
@@ -90,15 +88,11 @@ function getModelStats(projectIdentifier?: string): ModelStats[] {
                 COALESCE(SUM(energy_wh), 0) as energy_wh,
                 COALESCE(SUM(total_tokens), 0) as tokens
             FROM sessions
-            ${projectFilter}
             GROUP BY primary_model
             ORDER BY co2_grams DESC
         `);
 
-        const rows = (projectIdentifier ? stmt.all(projectIdentifier) : stmt.all()) as Record<
-            string,
-            unknown
-        >[];
+        const rows = stmt.all() as Record<string, unknown>[];
         return rows.map((row) => ({
             model: row.model as string,
             sessions: Number(row.sessions),
@@ -119,14 +113,12 @@ function friendlyModelName(modelId: string): string {
 
 async function main(): Promise<void> {
     try {
-        const projectId = resolveProjectIdentifier(process.cwd());
-
         const { allTimeStats, projectStats, modelStats, syncInfo } = withDatabase((db) => {
             const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
             return {
-                allTimeStats: getAggregateStats(db, projectId),
+                allTimeStats: getAggregateStats(db),
                 projectStats: getProjectStats(db, 30),
-                modelStats: getModelStats(projectId),
+                modelStats: getModelStats(),
                 syncInfo: {
                     enabled: syncEnabled,
                     userName: syncEnabled ? getConfig(db, 'claude_code_user_name') : null,
@@ -144,7 +136,6 @@ async function main(): Promise<void> {
         console.log(`${c.bold}  ╔══════════════════════════════════════════════════╗${c.reset}`);
         console.log(`${c.bold}  ║           Climate Impact Report                 ║${c.reset}`);
         console.log(`${c.bold}  ╚══════════════════════════════════════════════════╝${c.reset}`);
-        console.log(`${c.dim}  Project: ${projectId}${c.reset}`);
         console.log('');
 
         // ── Big numbers ───────────────────────────────────────
