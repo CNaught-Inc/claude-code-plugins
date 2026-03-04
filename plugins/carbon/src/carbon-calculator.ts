@@ -56,7 +56,7 @@ const ANTHROPIC_LARGE_BASE = {
     maxGpuUtilization: 0.075,
     nonGpuUtilization: 0.0625,
     pue: 1.14,
-    cif: 0.300,
+    cif: 0.3
 } as const;
 
 const MODEL_CONFIGS: Record<string, ModelConfig> = {
@@ -66,21 +66,21 @@ const MODEL_CONFIGS: Record<string, ModelConfig> = {
         displayName: 'Claude 3 Haiku',
         family: 'haiku',
         medianTps: 109,
-        medianTtftSeconds: 0.37,
+        medianTtftSeconds: 0.37
     },
     'claude-3-5-haiku-20241022': {
         ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude 3.5 Haiku',
         family: 'haiku',
         medianTps: 70,
-        medianTtftSeconds: 0.54,
+        medianTtftSeconds: 0.54
     },
     'claude-haiku-4-5-20251001': {
         ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude 4.5 Haiku',
         family: 'haiku',
         medianTps: 148,
-        medianTtftSeconds: 0.52,
+        medianTtftSeconds: 0.52
     },
 
     // Sonnet models
@@ -89,14 +89,14 @@ const MODEL_CONFIGS: Record<string, ModelConfig> = {
         displayName: 'Claude Sonnet 4',
         family: 'sonnet',
         medianTps: 75,
-        medianTtftSeconds: 1.01,
+        medianTtftSeconds: 1.01
     },
     'claude-sonnet-4-5-20250929': {
         ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude 4.5 Sonnet',
         family: 'sonnet',
         medianTps: 81,
-        medianTtftSeconds: 1.27,
+        medianTtftSeconds: 1.27
     },
 
     // Opus models
@@ -105,14 +105,14 @@ const MODEL_CONFIGS: Record<string, ModelConfig> = {
         displayName: 'Claude Opus 4',
         family: 'opus',
         medianTps: 55,
-        medianTtftSeconds: 1.19,
+        medianTtftSeconds: 1.19
     },
     'claude-opus-4-1-20250805': {
         ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude Opus 4.1',
         family: 'opus',
         medianTps: 58,
-        medianTtftSeconds: 1.38,
+        medianTtftSeconds: 1.38
     },
 
     // Versionless entries — any dated variant (e.g. claude-opus-4-5-20251101) maps here
@@ -121,35 +121,35 @@ const MODEL_CONFIGS: Record<string, ModelConfig> = {
         displayName: 'Claude Opus 4.5',
         family: 'opus',
         medianTps: 78,
-        medianTtftSeconds: 1.33,
+        medianTtftSeconds: 1.33
     },
     'claude-opus-4-6': {
         ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude Opus 4.6',
         family: 'opus',
         medianTps: 69,
-        medianTtftSeconds: 1.73,
+        medianTtftSeconds: 1.73
     },
     'claude-sonnet-4-6': {
         ...ANTHROPIC_LARGE_BASE,
         displayName: 'Claude Sonnet 4.6',
         family: 'sonnet',
         medianTps: 59,
-        medianTtftSeconds: 0.88,
-    },
+        medianTtftSeconds: 0.88
+    }
 };
 
 /** Family-level fallback configs for unrecognized model IDs */
 const FAMILY_DEFAULTS: Record<string, ModelConfig> = {
     haiku: { ...MODEL_CONFIGS['claude-haiku-4-5-20251001'], displayName: 'Unknown Haiku' },
     sonnet: { ...MODEL_CONFIGS['claude-sonnet-4-5-20250929'], displayName: 'Unknown Sonnet' },
-    opus: { ...MODEL_CONFIGS['claude-opus-4-1-20250805'], displayName: 'Unknown Opus' },
+    opus: { ...MODEL_CONFIGS['claude-opus-4-1-20250805'], displayName: 'Unknown Opus' }
 };
 
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
     ...FAMILY_DEFAULTS.sonnet,
     displayName: 'Unknown Model',
-    family: 'unknown',
+    family: 'unknown'
 };
 
 /**
@@ -239,7 +239,7 @@ export function calculateEnergy(
 
     return {
         energyWh,
-        energyKwh: energyWh / 1000,
+        energyKwh: energyWh / 1000
     };
 }
 
@@ -272,9 +272,9 @@ export function calculateRecordCarbon(record: TokenUsageRecord): CarbonResult {
         modelBreakdown: {
             [modelConfig.family]: {
                 energyWh: energy.energyWh,
-                co2Grams,
-            },
-        },
+                co2Grams
+            }
+        }
     };
 }
 
@@ -305,11 +305,11 @@ export function calculateSessionCarbon(session: SessionUsage): CarbonResult {
     return {
         energy: {
             energyWh: totalEnergyWh,
-            energyKwh: totalEnergyWh / 1000,
+            energyKwh: totalEnergyWh / 1000
         },
         co2Grams: totalCO2,
         co2Kg: totalCO2 / 1000,
-        modelBreakdown,
+        modelBreakdown
     };
 }
 
@@ -319,10 +319,7 @@ export function calculateSessionCarbon(session: SessionUsage): CarbonResult {
  * Approximates as a single inference (one TTFT + all output tokens / TPS).
  */
 export function calculateCarbonFromTokens(
-    inputTokens: number,
     outputTokens: number,
-    cacheCreationTokens: number = 0,
-    cacheReadTokens: number = 0,
     model: string = 'unknown'
 ): CarbonResult {
     const modelConfig = getModelConfig(model);
@@ -336,9 +333,9 @@ export function calculateCarbonFromTokens(
         modelBreakdown: {
             [modelConfig.family]: {
                 energyWh: energy.energyWh,
-                co2Grams,
-            },
-        },
+                co2Grams
+            }
+        }
     };
 }
 

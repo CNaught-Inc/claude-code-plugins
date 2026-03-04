@@ -205,12 +205,12 @@ function extractTimestamp(line: string): Date | null {
         const entry = JSON.parse(line);
         if (typeof entry.timestamp === 'string') {
             const date = new Date(entry.timestamp);
-            if (!isNaN(date.getTime())) return date;
+            if (!Number.isNaN(date.getTime())) return date;
         }
         // Also check nested snapshot.timestamp (file-history-snapshot entries)
         if (typeof entry.snapshot?.timestamp === 'string') {
             const date = new Date(entry.snapshot.timestamp);
-            if (!isNaN(date.getTime())) return date;
+            if (!Number.isNaN(date.getTime())) return date;
         }
     } catch {
         // Skip malformed lines

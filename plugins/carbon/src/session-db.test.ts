@@ -53,16 +53,17 @@ describe('saveSessionToDb', () => {
 
         const record = getSession(db, 'session-1');
         expect(record).not.toBeNull();
-        expect(record!.sessionId).toBe('session-1');
-        expect(record!.projectPath).toBe('/test/project');
-        expect(record!.inputTokens).toBe(1000);
-        expect(record!.outputTokens).toBe(500);
-        expect(record!.cacheCreationTokens).toBe(200);
-        expect(record!.cacheReadTokens).toBe(100);
-        expect(record!.totalTokens).toBe(1800);
-        expect(record!.energyWh).toBeCloseTo(0.05);
-        expect(record!.co2Grams).toBeCloseTo(0.015);
-        expect(record!.primaryModel).toBe('claude-sonnet-4-20250514');
+        const r = record as NonNullable<typeof record>;
+        expect(r.sessionId).toBe('session-1');
+        expect(r.projectPath).toBe('/test/project');
+        expect(r.inputTokens).toBe(1000);
+        expect(r.outputTokens).toBe(500);
+        expect(r.cacheCreationTokens).toBe(200);
+        expect(r.cacheReadTokens).toBe(100);
+        expect(r.totalTokens).toBe(1800);
+        expect(r.energyWh).toBeCloseTo(0.05);
+        expect(r.co2Grams).toBeCloseTo(0.015);
+        expect(r.primaryModel).toBe('claude-sonnet-4-20250514');
 
         db.close();
     });
@@ -93,12 +94,13 @@ describe('saveSessionToDb', () => {
         saveSessionToDb(db, 'session-1', updatedUsage, updatedCarbon);
 
         const record = getSession(db, 'session-1');
-        expect(record!.inputTokens).toBe(2000);
-        expect(record!.totalTokens).toBe(3600);
-        expect(record!.energyWh).toBeCloseTo(0.1);
-        expect(record!.co2Grams).toBeCloseTo(0.03);
+        const r = record as NonNullable<typeof record>;
+        expect(r.inputTokens).toBe(2000);
+        expect(r.totalTokens).toBe(3600);
+        expect(r.energyWh).toBeCloseTo(0.1);
+        expect(r.co2Grams).toBeCloseTo(0.03);
         // createdAt preserved from original insert
-        expect(record!.createdAt.toISOString()).toBe('2025-01-01T00:00:00.000Z');
+        expect(r.createdAt.toISOString()).toBe('2025-01-01T00:00:00.000Z');
 
         db.close();
     });

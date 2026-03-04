@@ -8,8 +8,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { getClaudeDir } from './data-store';
 import type { SessionRecord } from './data-store';
+import { getClaudeDir } from './data-store';
 import { log, logError } from './utils/stdin';
 
 const REQUEST_TIMEOUT_MS = 10_000;

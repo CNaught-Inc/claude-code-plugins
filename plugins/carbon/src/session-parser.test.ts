@@ -32,7 +32,7 @@ mock.module('fs', () => ({
 const _realProjectIdentifier = { ...require('./project-identifier') };
 mock.module('./project-identifier.js', () => ({
     ..._realProjectIdentifier,
-    resolveProjectIdentifier: (p: string) => `test_project_abcd1234`
+    resolveProjectIdentifier: (_p: string) => `test_project_abcd1234`
 }));
 
 const {

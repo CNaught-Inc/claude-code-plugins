@@ -232,14 +232,14 @@ describe('calculateSessionCarbon', () => {
 
 describe('calculateCarbonFromTokens', () => {
     it('calculates from raw token counts using output tokens', () => {
-        const result = calculateCarbonFromTokens(5000, 3000, 1000, 1000, 'claude-opus-4-20250514');
+        const result = calculateCarbonFromTokens(3000, 'claude-opus-4-20250514');
         // Same as calculateRecordCarbon with 3000 output tokens
         expect(result.energy.energyWh).toBeCloseTo(11.5, 0);
         expect(result.co2Grams).toBeCloseTo(3.45, 0);
     });
 
     it('uses defaults for optional parameters', () => {
-        const result = calculateCarbonFromTokens(1000, 500);
+        const result = calculateCarbonFromTokens(500);
         // Default (Sonnet 4.5), 500 output tokens
         // inferenceTime = (1.27 + 500/81) / 3600 ≈ 0.002067 hours
         // Energy ≈ 1.54 Wh

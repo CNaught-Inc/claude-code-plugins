@@ -90,16 +90,17 @@ describe('upsertSession / getSession', () => {
         const retrieved = getSession(db, 'session-1');
 
         expect(retrieved).not.toBeNull();
-        expect(retrieved!.sessionId).toBe('session-1');
-        expect(retrieved!.projectPath).toBe('/test/project');
-        expect(retrieved!.inputTokens).toBe(1000);
-        expect(retrieved!.outputTokens).toBe(500);
-        expect(retrieved!.cacheCreationTokens).toBe(200);
-        expect(retrieved!.cacheReadTokens).toBe(100);
-        expect(retrieved!.totalTokens).toBe(1800);
-        expect(retrieved!.energyWh).toBeCloseTo(0.05);
-        expect(retrieved!.co2Grams).toBeCloseTo(0.015);
-        expect(retrieved!.primaryModel).toBe('claude-sonnet-4-20250514');
+        const r = retrieved as NonNullable<typeof retrieved>;
+        expect(r.sessionId).toBe('session-1');
+        expect(r.projectPath).toBe('/test/project');
+        expect(r.inputTokens).toBe(1000);
+        expect(r.outputTokens).toBe(500);
+        expect(r.cacheCreationTokens).toBe(200);
+        expect(r.cacheReadTokens).toBe(100);
+        expect(r.totalTokens).toBe(1800);
+        expect(r.energyWh).toBeCloseTo(0.05);
+        expect(r.co2Grams).toBeCloseTo(0.015);
+        expect(r.primaryModel).toBe('claude-sonnet-4-20250514');
         db.close();
     });
 
@@ -125,10 +126,11 @@ describe('upsertSession / getSession', () => {
         );
 
         const retrieved = getSession(db, 'session-1');
-        expect(retrieved!.inputTokens).toBe(2000);
-        expect(retrieved!.totalTokens).toBe(3000);
+        const r = retrieved as NonNullable<typeof retrieved>;
+        expect(r.inputTokens).toBe(2000);
+        expect(r.totalTokens).toBe(3000);
         // createdAt should be preserved (from original insert)
-        expect(retrieved!.createdAt.toISOString()).toBe('2025-01-01T00:00:00.000Z');
+        expect(r.createdAt.toISOString()).toBe('2025-01-01T00:00:00.000Z');
         db.close();
     });
 });
@@ -248,7 +250,10 @@ describe('getAggregateStats with project filtering', () => {
 
     it('returns zeroes for unknown project', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1', projectIdentifier: 'org_project-a_aaaa1111' }));
+        upsertSession(
+            db,
+            makeSession({ sessionId: 's1', projectIdentifier: 'org_project-a_aaaa1111' })
+        );
 
         const stats = getAggregateStats(db, 'nonexistent');
         expect(stats.totalSessions).toBe(0);
@@ -272,8 +277,9 @@ describe('getInstalledAt / setInstalledAt', () => {
 
         const installedAt = getInstalledAt(db);
         expect(installedAt).not.toBeNull();
-        expect(installedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
-        expect(installedAt!.getTime()).toBeLessThanOrEqual(after.getTime());
+        const t = installedAt as NonNullable<typeof installedAt>;
+        expect(t.getTime()).toBeGreaterThanOrEqual(before.getTime());
+        expect(t.getTime()).toBeLessThanOrEqual(after.getTime());
         db.close();
     });
 
@@ -286,7 +292,9 @@ describe('getInstalledAt / setInstalledAt', () => {
         setInstalledAt(db);
         const second = getInstalledAt(db);
 
-        expect(first!.toISOString()).toBe(second!.toISOString());
+        const f = first as NonNullable<typeof first>;
+        const s = second as NonNullable<typeof second>;
+        expect(f.toISOString()).toBe(s.toISOString());
         db.close();
     });
 });
@@ -574,7 +582,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         expect(unsynced).toHaveLength(2);
         expect(unsynced.map((s) => s.sessionId).sort()).toEqual(['s1', 's2']);
 
-        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get('s1') as { sync_status: string };
         expect(row.sync_status).toBe('pending');
         db.close();
     });
@@ -591,7 +601,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         expect(unsynced).toHaveLength(1);
         expect(unsynced[0].sessionId).toBe('s2');
 
-        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get('s1') as { sync_status: string };
         expect(row.sync_status).toBe('synced');
         db.close();
     });
@@ -602,7 +614,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
 
         markSessionSyncFailed(db, ['s1']);
 
-        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get('s1') as { sync_status: string };
         expect(row.sync_status).toBe('failed');
         db.close();
     });
@@ -640,7 +654,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
         expect(unsynced).toHaveLength(1);
         expect(unsynced[0].sessionId).toBe('s1');
 
-        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get('s1') as { sync_status: string };
         expect(row.sync_status).toBe('dirty');
         db.close();
     });
@@ -652,7 +668,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
 
         upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
 
-        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get('s1') as { sync_status: string };
         expect(row.sync_status).toBe('dirty');
         db.close();
     });
@@ -663,7 +681,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
 
         upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
 
-        const row = db.prepare('SELECT sync_status FROM sessions WHERE session_id = ?').get('s1') as { sync_status: string };
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get('s1') as { sync_status: string };
         expect(row.sync_status).toBe('pending');
         db.close();
     });

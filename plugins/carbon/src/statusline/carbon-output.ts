@@ -7,7 +7,6 @@
 
 import { calculateCarbonFromTokens } from '../carbon-calculator';
 import { queryReadonlyDb } from '../data-store';
-import { resolveProjectIdentifier } from '../project-identifier';
 import type { StatuslineInput } from '../utils/stdin';
 
 function getSessionStatsFromDb(sessionId: string): { co2Grams: number; energyWh: number } | null {
@@ -96,9 +95,6 @@ function getTotalEnergyFromDb(projectIdentifier?: string): number | null {
 export function getCarbonOutput(input: StatuslineInput): string {
     const usage = input.context_window?.current_usage || {};
 
-    const rawProjectPath = input.project_path || input.cwd;
-    const projectIdentifier = rawProjectPath ? resolveProjectIdentifier(rawProjectPath) : undefined;
-
     // Session CO2: prefer the authoritative DB value (cumulative, per-request TTFT).
     // Fall back to a live estimate from context window tokens before the first stop hook.
     const dbSessionStats = input.session_id ? getSessionStatsFromDb(input.session_id) : null;
@@ -112,13 +108,7 @@ export function getCarbonOutput(input: StatuslineInput): string {
         // No DB record yet — estimate from current context window tokens
         const outputTokens = usage.output_tokens ?? 0;
         if (outputTokens > 0) {
-            const result = calculateCarbonFromTokens(
-                usage.input_tokens ?? 0,
-                outputTokens,
-                usage.cache_creation_input_tokens ?? 0,
-                usage.cache_read_input_tokens ?? 0,
-                input.model?.id ?? 'unknown'
-            );
+            const result = calculateCarbonFromTokens(outputTokens, input.model?.id ?? 'unknown');
             sessionCO2 = result.co2Grams;
             sessionEnergyWh = result.energy.energyWh;
         } else {

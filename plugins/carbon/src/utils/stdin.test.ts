@@ -94,7 +94,7 @@ describe('StatuslineInputSchema', () => {
             unknown_field: 'should be stripped'
         });
         expect(result.session_id).toBe('abc');
-        expect((result as any).unknown_field).toBeUndefined();
+        expect('unknown_field' in result).toBe(false);
     });
 });
 

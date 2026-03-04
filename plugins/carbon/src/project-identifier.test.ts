@@ -53,4 +53,3 @@ describe('parseGitRemote', () => {
         expect(parseGitRemote('')).toBeNull();
     });
 });
-

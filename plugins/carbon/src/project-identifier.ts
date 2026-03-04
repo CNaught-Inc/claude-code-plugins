@@ -10,8 +10,8 @@
  * uniqueness even when org/repo collide across machines.
  */
 
-import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
+import * as crypto from 'node:crypto';
 
 import { getProjectConfig, queryReadonlyDb } from './data-store';
 

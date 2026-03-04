@@ -18,7 +18,12 @@ function stripPrefixes(params: Record<string, unknown>): Record<string, unknown>
 }
 
 function maybeStrip(args: unknown[]): unknown[] {
-    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0])) {
+    if (
+        args.length === 1 &&
+        typeof args[0] === 'object' &&
+        args[0] !== null &&
+        !Array.isArray(args[0])
+    ) {
         return [stripPrefixes(args[0] as Record<string, unknown>)];
     }
     return args;
