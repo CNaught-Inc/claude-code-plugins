@@ -1,8 +1,8 @@
 {
-    "name": "carbon",
-    "version": "2.5.2",
-    "description": "Track and offset carbon emissions from your Claude Code usage",
-    "author": {
-        "name": "CNaught"
-    }
+  "name": "carbon",
+  "version": "2.5.3",
+  "description": "Track and offset carbon emissions from your Claude Code usage",
+  "author": {
+    "name": "CNaught"
+  }
 }
