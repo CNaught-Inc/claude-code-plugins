@@ -142,14 +142,20 @@ describe('convertToUserScope', () => {
         fs.writeFileSync(
             path.join(projectA, '.claude', 'settings.local.json'),
             JSON.stringify({
-                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /path/to/carbon-statusline.ts'
+                },
                 enabledPlugins: { 'carbon@cnaught-plugins': true }
             })
         );
         fs.writeFileSync(
             path.join(projectB, '.claude', 'settings.local.json'),
             JSON.stringify({
-                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /path/to/carbon-statusline.ts'
+                },
                 enabledPlugins: { 'carbon@cnaught-plugins': true, 'other-plugin': true }
             })
         );
@@ -216,7 +222,10 @@ describe('convertToUserScope', () => {
         fs.writeFileSync(
             path.join(projectA, '.claude', 'settings.local.json'),
             JSON.stringify({
-                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /path/to/carbon-statusline.ts'
+                },
                 enabledPlugins: { 'carbon@cnaught-plugins': true }
             })
         );
@@ -255,7 +264,11 @@ describe('convertToUserScope', () => {
         fs.writeFileSync(
             path.join(projectA, '.claude', 'settings.local.json'),
             JSON.stringify({
-                statusLine: { type: 'command', command: 'npx -y bun /path/to/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"' },
+                statusLine: {
+                    type: 'command',
+                    command:
+                        'npx -y bun /path/to/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"'
+                },
                 _carbonOriginalStatusLine: { type: 'command', command: 'bunx ccstatusline@latest' },
                 enabledPlugins: { 'carbon@cnaught-plugins': true }
             })
@@ -267,7 +280,10 @@ describe('convertToUserScope', () => {
             fs.readFileSync(path.join(projectA, '.claude', 'settings.local.json'), 'utf-8')
         );
         // Original statusline should be restored
-        expect(settingsA.statusLine).toEqual({ type: 'command', command: 'bunx ccstatusline@latest' });
+        expect(settingsA.statusLine).toEqual({
+            type: 'command',
+            command: 'bunx ccstatusline@latest'
+        });
         expect(settingsA._carbonOriginalStatusLine).toBeUndefined();
     });
 });
@@ -304,7 +320,13 @@ describe('cleanupAllInstallations', () => {
                         }
                     ],
                     'other-plugin@marketplace': [
-                        { scope: 'user', installPath: '/other', version: '1.0.0', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' }
+                        {
+                            scope: 'user',
+                            installPath: '/other',
+                            version: '1.0.0',
+                            installedAt: '2026-01-01T00:00:00.000Z',
+                            lastUpdated: '2026-01-01T00:00:00.000Z'
+                        }
                     ]
                 }
             })
@@ -313,7 +335,10 @@ describe('cleanupAllInstallations', () => {
         fs.writeFileSync(
             path.join(projectA, '.claude', 'settings.local.json'),
             JSON.stringify({
-                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /path/to/carbon-statusline.ts'
+                },
                 enabledPlugins: { 'carbon@cnaught-plugins': true }
             })
         );
@@ -321,7 +346,10 @@ describe('cleanupAllInstallations', () => {
         fs.writeFileSync(
             path.join(tmpDir, 'settings.json'),
             JSON.stringify({
-                statusLine: { type: 'command', command: 'npx -y bun /path/to/carbon-statusline.ts' },
+                statusLine: {
+                    type: 'command',
+                    command: 'npx -y bun /path/to/carbon-statusline.ts'
+                },
                 enabledPlugins: { 'carbon@cnaught-plugins': true }
             })
         );
@@ -514,7 +542,8 @@ describe('updateStatuslinePath', () => {
             JSON.stringify({
                 statusLine: {
                     type: 'command',
-                    command: 'npx -y bun /old/cache/carbon/2.4.0/src/statusline/carbon-statusline.ts'
+                    command:
+                        'npx -y bun /old/cache/carbon/2.4.0/src/statusline/carbon-statusline.ts'
                 }
             })
         );
@@ -536,7 +565,8 @@ describe('updateStatuslinePath', () => {
             JSON.stringify({
                 statusLine: {
                     type: 'command',
-                    command: 'npx -y bun /old/cache/carbon/2.4.0/src/statusline/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"'
+                    command:
+                        'npx -y bun /old/cache/carbon/2.4.0/src/statusline/statusline-wrapper.ts --original-command "bunx ccstatusline@latest"'
                 }
             })
         );
@@ -603,7 +633,10 @@ describe('updateStatuslinePath', () => {
 
         const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
         expect(settings.permissions).toEqual({ allow: ['Bash(git:*)'] });
-        expect(settings._carbonOriginalStatusLine).toEqual({ type: 'command', command: 'bunx ccstatusline@latest' });
+        expect(settings._carbonOriginalStatusLine).toEqual({
+            type: 'command',
+            command: 'bunx ccstatusline@latest'
+        });
     });
 });
 

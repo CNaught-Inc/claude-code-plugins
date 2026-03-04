@@ -13,7 +13,9 @@ import type { StatuslineInput } from '../utils/stdin';
 function getSessionStatsFromDb(sessionId: string): { co2Grams: number; energyWh: number } | null {
     return queryReadonlyDb((db) => {
         const row = db
-            .prepare('SELECT COALESCE(co2_grams, 0) as co2, COALESCE(energy_wh, 0) as energy FROM sessions WHERE session_id = ?')
+            .prepare(
+                'SELECT COALESCE(co2_grams, 0) as co2, COALESCE(energy_wh, 0) as energy FROM sessions WHERE session_id = ?'
+            )
             .get(sessionId) as { co2: number; energy: number } | undefined;
         if (!row) return null;
         return { co2Grams: row.co2, energyWh: row.energy };
@@ -108,14 +110,14 @@ export function getCarbonOutput(input: StatuslineInput): string {
         sessionEnergyWh = dbSessionStats.energyWh;
     } else {
         // No DB record yet — estimate from current context window tokens
-        const outputTokens = usage.output_tokens || 0;
+        const outputTokens = usage.output_tokens ?? 0;
         if (outputTokens > 0) {
             const result = calculateCarbonFromTokens(
-                usage.input_tokens || 0,
+                usage.input_tokens ?? 0,
                 outputTokens,
-                usage.cache_creation_input_tokens || 0,
-                usage.cache_read_input_tokens || 0,
-                input.model?.id || 'unknown'
+                usage.cache_creation_input_tokens ?? 0,
+                usage.cache_read_input_tokens ?? 0,
+                input.model?.id ?? 'unknown'
             );
             sessionCO2 = result.co2Grams;
             sessionEnergyWh = result.energy.energyWh;
@@ -148,8 +150,8 @@ export function getCarbonOutput(input: StatuslineInput): string {
     const syncInfo = getSyncInfo();
     if (syncInfo.enabled && syncInfo.userName && syncInfo.userId) {
         const syncStatus = input.session_id ? getSessionSyncStatus(input.session_id) : null;
-        const green = '\x1b[38;2;50;205;50m';      // Lime green #32CD32
-        const red = '\x1b[38;2;208;83;63m';       // Brand orange #D0533F
+        const green = '\x1b[38;2;50;205;50m'; // Lime green #32CD32
+        const red = '\x1b[38;2;208;83;63m'; // Brand orange #D0533F
         // ⇄ text-based sync arrows respond to ANSI coloring
         if (syncStatus === 'synced' || syncStatus === 'dirty') {
             syncSuffix = ` ${green}\u21C4${reset}`;

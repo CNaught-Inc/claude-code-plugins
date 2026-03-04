@@ -107,17 +107,14 @@ function parseJsonlLines(lines: string[]): TokenUsageRecord[] {
             const usage = data.message.usage;
             records.push({
                 requestId,
-                model: data.message.model || 'unknown',
-                inputTokens: usage.input_tokens || 0,
-                outputTokens: usage.output_tokens || 0,
-                cacheCreationTokens: usage.cache_creation_input_tokens || 0,
-                cacheReadTokens: usage.cache_read_input_tokens || 0,
+                model: data.message.model ?? 'unknown',
+                inputTokens: usage.input_tokens ?? 0,
+                outputTokens: usage.output_tokens ?? 0,
+                cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+                cacheReadTokens: usage.cache_read_input_tokens ?? 0,
                 timestamp: new Date()
             });
-        } catch {
-            // Skip malformed lines
-            continue;
-        }
+        } catch {}
     }
 
     return records;
@@ -277,7 +274,7 @@ function tryDecodeProjectPath(encodedPath: string): string {
     function dfs(idx: number, currentDir: string, component: string): void {
         if (result) return;
         if (idx === segments.length) {
-            const fullPath = currentDir + '/' + component;
+            const fullPath = `${currentDir}/${component}`;
             if (fs.existsSync(fullPath)) {
                 result = fullPath;
             }
@@ -285,13 +282,13 @@ function tryDecodeProjectPath(encodedPath: string): string {
         }
 
         // Option 1: treat `-` as path separator — component is a complete directory
-        const closedDir = currentDir + '/' + component;
+        const closedDir = `${currentDir}/${component}`;
         if (fs.existsSync(closedDir)) {
             dfs(idx + 1, closedDir, segments[idx]);
         }
 
         // Option 2: treat `-` as literal hyphen — extend the current component
-        dfs(idx + 1, currentDir, component + '-' + segments[idx]);
+        dfs(idx + 1, currentDir, `${component}-${segments[idx]}`);
     }
 
     if (segments.length > 0) {
@@ -368,7 +365,7 @@ export function parseSession(transcriptPath: string, rawProjectPath?: string): S
             record.outputTokens +
             record.cacheCreationTokens +
             record.cacheReadTokens;
-        modelBreakdown[record.model] = (modelBreakdown[record.model] || 0) + totalForRecord;
+        modelBreakdown[record.model] = (modelBreakdown[record.model] ?? 0) + totalForRecord;
     }
 
     // Determine primary model (most tokens)

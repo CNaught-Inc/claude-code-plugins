@@ -516,7 +516,7 @@ describe('migrations', () => {
         initializeDatabase(db);
 
         // Simulate an older database by resetting user_version
-        db.exec('PRAGMA user_version = 0');
+        db.run('PRAGMA user_version = 0');
         initializeDatabase(db);
 
         const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
@@ -731,7 +731,7 @@ describe('configureSyncTracking sync_status behavior', () => {
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'test-user-id');
         setConfig(db, 'claude_code_user_name', 'Test User');
-        db.exec("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
+        db.run("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
 
         // Existing sessions should no longer need sync
         expect(getUnsyncedSessions(db, 100)).toHaveLength(0);

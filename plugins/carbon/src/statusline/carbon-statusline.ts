@@ -18,8 +18,7 @@
  *   }
  * }
  *
- * Output format:
- * 🌱 session: 2.45g · total: 123.45g CO₂
+ * Output: A single-line climate impact summary for the status bar.
  */
 
 import '../utils/load-env';

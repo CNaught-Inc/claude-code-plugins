@@ -63,7 +63,7 @@ export interface ProjectStats {
  * Get the user's home directory
  */
 export function getHomeDir(): string {
-    return process.env.HOME || process.env.USERPROFILE || '';
+    return process.env.HOME ?? process.env.USERPROFILE ?? '';
 }
 
 /**
@@ -111,7 +111,7 @@ export function openDatabase(): Database {
     ensureDbDirectory();
     const dbPath = getDatabasePath();
     const db = new Database(dbPath);
-    db.exec('PRAGMA journal_mode=WAL');
+    db.run('PRAGMA journal_mode=WAL');
     return db;
 }
 
@@ -161,7 +161,7 @@ export const MIGRATIONS: Migration[] = [
         description: 'Add needs_sync flag for API sync tracking',
         up: (db) => {
             if (!columnExists(db, 'sessions', 'needs_sync')) {
-                db.exec('ALTER TABLE sessions ADD COLUMN needs_sync INTEGER NOT NULL DEFAULT 1');
+                db.run('ALTER TABLE sessions ADD COLUMN needs_sync INTEGER NOT NULL DEFAULT 1');
             }
         }
     },
@@ -170,10 +170,10 @@ export const MIGRATIONS: Migration[] = [
         description: 'Add project_identifier column for stable project identification',
         up: (db) => {
             if (!columnExists(db, 'sessions', 'project_identifier')) {
-                db.exec(
+                db.run(
                     "ALTER TABLE sessions ADD COLUMN project_identifier TEXT NOT NULL DEFAULT ''"
                 );
-                db.exec(
+                db.run(
                     'CREATE INDEX IF NOT EXISTS idx_sessions_project_identifier ON sessions(project_identifier)'
                 );
             }
@@ -183,7 +183,7 @@ export const MIGRATIONS: Migration[] = [
         version: 3,
         description: 'Add project_config table for per-project settings',
         up: (db) => {
-            db.exec(`
+            db.run(`
                 CREATE TABLE IF NOT EXISTS project_config (
                     project_hash TEXT NOT NULL,
                     key TEXT NOT NULL,
@@ -198,7 +198,7 @@ export const MIGRATIONS: Migration[] = [
         description: 'Add models_used column for tracking all models in a session',
         up: (db) => {
             if (!columnExists(db, 'sessions', 'models_used')) {
-                db.exec("ALTER TABLE sessions ADD COLUMN models_used TEXT NOT NULL DEFAULT '{}'");
+                db.run("ALTER TABLE sessions ADD COLUMN models_used TEXT NOT NULL DEFAULT '{}'");
             }
         }
     },
@@ -207,13 +207,15 @@ export const MIGRATIONS: Migration[] = [
         description: 'Replace needs_sync flag with sync_status state machine',
         up: (db) => {
             if (!columnExists(db, 'sessions', 'sync_status')) {
-                db.exec("ALTER TABLE sessions ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'");
+                db.run(
+                    "ALTER TABLE sessions ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'"
+                );
                 // Migrate existing data: needs_sync=0 → synced, needs_sync=1 → pending
-                db.exec("UPDATE sessions SET sync_status = 'synced' WHERE needs_sync = 0");
-                db.exec("UPDATE sessions SET sync_status = 'pending' WHERE needs_sync = 1");
+                db.run("UPDATE sessions SET sync_status = 'synced' WHERE needs_sync = 0");
+                db.run("UPDATE sessions SET sync_status = 'pending' WHERE needs_sync = 1");
             }
             if (columnExists(db, 'sessions', 'needs_sync')) {
-                db.exec('ALTER TABLE sessions DROP COLUMN needs_sync');
+                db.run('ALTER TABLE sessions DROP COLUMN needs_sync');
             }
         }
     }
@@ -241,12 +243,12 @@ function runMigrations(db: Database): void {
     for (let i = currentVersion; i < MIGRATIONS.length; i++) {
         const migration = MIGRATIONS[i];
         try {
-            db.exec('BEGIN');
+            db.run('BEGIN');
             migration.up(db);
-            db.exec(`PRAGMA user_version = ${migration.version}`);
-            db.exec('COMMIT');
+            db.run(`PRAGMA user_version = ${migration.version}`);
+            db.run('COMMIT');
         } catch (error) {
-            db.exec('ROLLBACK');
+            db.run('ROLLBACK');
             logError(`Migration v${migration.version} failed: ${migration.description}`, error);
             return;
         }
@@ -257,7 +259,7 @@ function runMigrations(db: Database): void {
  * Initialize the database schema
  */
 export function initializeDatabase(db: Database): void {
-    db.exec(`
+    db.run(`
         CREATE TABLE IF NOT EXISTS sessions (
             session_id TEXT PRIMARY KEY,
             project_path TEXT NOT NULL,
@@ -389,7 +391,10 @@ export function getAggregateStats(db: Database, projectIdentifier?: string): Agg
         ${whereClause}
     `);
 
-    const row = (projectIdentifier ? stmt.get(projectIdentifier) : stmt.get()) as Record<string, unknown>;
+    const row = (projectIdentifier ? stmt.get(projectIdentifier) : stmt.get()) as Record<
+        string,
+        unknown
+    >;
 
     return {
         totalSessions: Number(row.total_sessions),

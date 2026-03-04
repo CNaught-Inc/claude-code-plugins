@@ -24,14 +24,14 @@ const c = {
     reset: '\x1b[0m',
     bold: '\x1b[1m',
     dim: '\x1b[2m',
-    green: '\x1b[38;2;193;215;199m',    // Brand green #C1D7C7
-    yellow: '\x1b[38;2;243;214;95m',    // Brand yellow #F3D65F
-    blue: '\x1b[38;2;141;176;195m',     // Brand blue #8DB0C3
-    pink: '\x1b[38;2;245;192;238m',     // Brand pink #F5C0EE
-    teal: '\x1b[38;2;52;191;194m',      // Brand teal #34bfc2
-    peach: '\x1b[38;2;253;168;128m',    // Brand peach #FDA880
-    orange: '\x1b[38;2;208;83;63m',     // Brand orange #D0533F
-    gray: '\x1b[38;5;242m',
+    green: '\x1b[38;2;193;215;199m', // Brand green #C1D7C7
+    yellow: '\x1b[38;2;243;214;95m', // Brand yellow #F3D65F
+    blue: '\x1b[38;2;141;176;195m', // Brand blue #8DB0C3
+    pink: '\x1b[38;2;245;192;238m', // Brand pink #F5C0EE
+    teal: '\x1b[38;2;52;191;194m', // Brand teal #34bfc2
+    peach: '\x1b[38;2;253;168;128m', // Brand peach #FDA880
+    orange: '\x1b[38;2;208;83;63m', // Brand orange #D0533F
+    gray: '\x1b[38;5;242m'
 };
 
 // ── Formatting helpers ────────────────────────────────────────
@@ -57,7 +57,12 @@ function pct(value: number, total: number): string {
 
 // ── Graph builders ────────────────────────────────────────────
 
-function progressBar(value: number, maxValue: number, width: number = 20, color: string = c.green): string {
+function progressBar(
+    value: number,
+    maxValue: number,
+    width: number = 20,
+    color: string = c.green
+): string {
     if (maxValue === 0) return `${c.gray}[${'·'.repeat(width)}]${c.reset}`;
     const filled = Math.round((value / maxValue) * width);
     const empty = width - filled;
@@ -90,13 +95,16 @@ function getModelStats(projectIdentifier?: string): ModelStats[] {
             ORDER BY co2_grams DESC
         `);
 
-        const rows = (projectIdentifier ? stmt.all(projectIdentifier) : stmt.all()) as Record<string, unknown>[];
+        const rows = (projectIdentifier ? stmt.all(projectIdentifier) : stmt.all()) as Record<
+            string,
+            unknown
+        >[];
         return rows.map((row) => ({
             model: row.model as string,
             sessions: Number(row.sessions),
             co2Grams: Number(row.co2_grams),
             energyWh: Number(row.energy_wh),
-            tokens: Number(row.tokens),
+            tokens: Number(row.tokens)
         }));
     });
 }
@@ -143,9 +151,15 @@ async function main(): Promise<void> {
         console.log(`${c.bold}  All-Time Totals${c.reset}`);
         console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
         console.log('');
-        console.log(`    ${c.bold}${c.yellow}CO₂${c.reset}    ${c.bold}${kg(totalCO2)}${c.reset} kg    ${c.dim}(${formatCO2(totalCO2)})${c.reset}`);
-        console.log(`    ${c.bold}${c.teal}Energy${c.reset} ${c.bold}${kwh(totalEnergy)}${c.reset} kWh   ${c.dim}(${formatEnergy(totalEnergy)})${c.reset}`);
-        console.log(`    ${c.dim}Sessions: ${fmt(allTimeStats.totalSessions)} · Tokens: ${fmt(allTimeStats.totalTokens)}${c.reset}`);
+        console.log(
+            `    ${c.bold}${c.yellow}CO₂${c.reset}    ${c.bold}${kg(totalCO2)}${c.reset} kg    ${c.dim}(${formatCO2(totalCO2)})${c.reset}`
+        );
+        console.log(
+            `    ${c.bold}${c.teal}Energy${c.reset} ${c.bold}${kwh(totalEnergy)}${c.reset} kWh   ${c.dim}(${formatEnergy(totalEnergy)})${c.reset}`
+        );
+        console.log(
+            `    ${c.dim}Sessions: ${fmt(allTimeStats.totalSessions)} · Tokens: ${fmt(allTimeStats.totalTokens)}${c.reset}`
+        );
         console.log('');
 
         // ── Real-world equivalents ────────────────────────────
@@ -160,8 +174,12 @@ async function main(): Promise<void> {
             const milesDriven = totalKg * MILES_PER_KG_CO2;
             const homeDays = totalKg / KG_PER_DAILY_HOME_ENERGY;
 
-            console.log(`    🚗  Miles driven       ${c.bold}${milesDriven.toFixed(2)} miles${c.reset}`);
-            console.log(`    🏠  Home energy         ${c.bold}${homeDays.toFixed(4)} days${c.reset}`);
+            console.log(
+                `    🚗  Miles driven       ${c.bold}${milesDriven.toFixed(2)} miles${c.reset}`
+            );
+            console.log(
+                `    🏠  Home energy         ${c.bold}${homeDays.toFixed(4)} days${c.reset}`
+            );
             console.log('');
         }
 
@@ -180,7 +198,9 @@ async function main(): Promise<void> {
                 const name = friendlyModelName(m.model).padEnd(22);
                 const bar = progressBar(m.co2Grams, totalModelCO2, 15, color);
                 const co2 = `${kg(m.co2Grams)}kg`.padStart(8);
-                console.log(`    ${bar} ${color}${name}${c.reset} ${c.bold}${co2}${c.reset}  ${c.dim}${m.sessions} sessions · ${pct(m.co2Grams, totalModelCO2)}${c.reset}`);
+                console.log(
+                    `    ${bar} ${color}${name}${c.reset} ${c.bold}${co2}${c.reset}  ${c.dim}${m.sessions} sessions · ${pct(m.co2Grams, totalModelCO2)}${c.reset}`
+                );
             }
             console.log('');
         }
@@ -199,13 +219,17 @@ async function main(): Promise<void> {
                 const color = projectColors[i % projectColors.length];
                 const name = p.projectPath.padEnd(22);
                 const bar = progressBar(p.co2Grams, totalProjectCO2, 15, color);
-                console.log(`    ${bar} ${color}${name}${c.reset} ${c.bold}${kg(p.co2Grams).padStart(6)}kg${c.reset}  ${c.dim}${pct(p.co2Grams, totalProjectCO2)}${c.reset}`);
+                console.log(
+                    `    ${bar} ${color}${name}${c.reset} ${c.bold}${kg(p.co2Grams).padStart(6)}kg${c.reset}  ${c.dim}${pct(p.co2Grams, totalProjectCO2)}${c.reset}`
+                );
             }
 
             if (projectStats.length > 5) {
                 const otherCO2 = projectStats.slice(5).reduce((sum, p) => sum + p.co2Grams, 0);
                 const bar = progressBar(otherCO2, totalProjectCO2, 15, c.dim);
-                console.log(`    ${bar} ${c.dim}${'other'.padEnd(22)}${c.reset} ${c.bold}${kg(otherCO2).padStart(6)}kg${c.reset}  ${c.dim}${pct(otherCO2, totalProjectCO2)}${c.reset}`);
+                console.log(
+                    `    ${bar} ${c.dim}${'other'.padEnd(22)}${c.reset} ${c.bold}${kg(otherCO2).padStart(6)}kg${c.reset}  ${c.dim}${pct(otherCO2, totalProjectCO2)}${c.reset}`
+                );
             }
             console.log('');
         }
@@ -217,7 +241,9 @@ async function main(): Promise<void> {
             console.log('');
             console.log(`    ${c.dim}Name:${c.reset}          ${syncInfo.userName || 'Unknown'}`);
             if (syncInfo.pendingCount > 0) {
-                console.log(`    ${c.dim}Pending sync:${c.reset}  ${syncInfo.pendingCount} session(s)`);
+                console.log(
+                    `    ${c.dim}Pending sync:${c.reset}  ${syncInfo.pendingCount} session(s)`
+                );
             }
             console.log('');
         }
@@ -225,13 +251,19 @@ async function main(): Promise<void> {
         // ── Footer ────────────────────────────────────────────
         const now = new Date();
         const timestamp = now.toLocaleString('en-US', {
-            month: 'short', day: 'numeric', year: 'numeric',
-            hour: 'numeric', minute: '2-digit', hour12: true
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
         });
         console.log(`${c.gray}  Last updated: ${timestamp}${c.reset}`);
         console.log(`${c.gray}  DB: ${getDatabasePath()}${c.reset}`);
         console.log(`${c.bold}  ╔══════════════════════════════════════════════════╗${c.reset}`);
-        console.log(`${c.bold}  ║  ${c.dim}Powered by CNaught · Track your AI footprint${c.reset}${c.bold}   ║${c.reset}`);
+        console.log(
+            `${c.bold}  ║  ${c.dim}Powered by CNaught · Track your AI footprint${c.reset}${c.bold}   ║${c.reset}`
+        );
         console.log(`${c.bold}  ╚══════════════════════════════════════════════════╝${c.reset}`);
         console.log('');
     } catch (error) {
