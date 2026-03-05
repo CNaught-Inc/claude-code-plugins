@@ -10,26 +10,23 @@ Generate a carbon emissions report.
 
 ## What it shows
 
-### All-Time Project Statistics
-- Total sessions tracked
-- Total tokens used (input/output/cache creation/cache read)
-- Total energy consumption (Wh)
-- Total CO₂ emissions (grams)
+### Summary (all-time)
+- Total CO₂ emissions (kg)
+- Total energy consumption (kWh)
+- Total sessions, tokens (with output token count)
 
-### 7-Day Summary
-- Number of sessions
-- Total tokens processed
-- Energy consumption
-- CO₂ emissions
+### Equivalents
+- Miles driven in a car
+- Days of home energy usage
 
-### Relatable Equivalents
-- Kilometers driven in a car
-- Smartphone charges
-- Hours of LED light usage
-- Google searches
+### By Model
+- Breakdown of CO₂ by model with progress bars, session counts, and percentages
 
-### Project Breakdown (optional)
-- Emissions by project/repository
+### By Project (if more than one project)
+- Breakdown of CO₂ by project with progress bars and percentages
+
+### Sync (if enabled)
+- Display name and pending sync count
 
 ## Script
 
