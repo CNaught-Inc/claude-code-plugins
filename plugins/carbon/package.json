@@ -1,6 +1,6 @@
 {
   "name": "@cnaught-inc/claude-code-carbon",
-  "version": "2.5.5",
+  "version": "2.5.6",
   "private": true,
   "description": "Claude Code plugin for tracking carbon emissions from AI usage",
   "scripts": {
