@@ -301,23 +301,30 @@ async function main(): Promise<void> {
             console.log('');
 
             const projectColors = [c.green, c.teal, c.yellow, c.pink, c.blue, c.peach];
+            const otherCount = projectStats.length > 5 ? projectStats.length - 5 : 0;
+            const otherLabel =
+                otherCount > 0 ? `+ ${otherCount} other${otherCount === 1 ? '' : 's'}` : '';
+            const maxNameLen = Math.max(
+                ...displayedProjects.map((p) => p.projectPath.length),
+                otherLabel.length
+            );
             for (let i = 0; i < displayedProjects.length; i++) {
                 const p = displayedProjects[i];
                 const color = projectColors[i % projectColors.length];
-                const name = p.projectPath.padEnd(22);
+                const name = p.projectPath.padEnd(maxNameLen);
                 const bar = progressBar(p.co2Grams, totalProjectCO2, 15, color);
+                const co2 = `${projectKgs[i].toFixed(2)}kg`.padStart(8);
                 console.log(
-                    `    ${bar} ${color}${name}${c.reset} ${c.bold}${projectKgs[i].toFixed(2).padStart(6)}kg${c.reset}  ${c.dim}${projectPcts[i]}%${c.reset}`
+                    `    ${bar} ${color}${name}${c.reset} ${c.bold}${co2}${c.reset}  ${c.dim}${projectPcts[i]}%${c.reset}`
                 );
             }
 
             if (otherCO2 > 0) {
-                const otherCount = projectStats.length - 5;
-                const otherLabel = `+ ${otherCount} other${otherCount === 1 ? '' : 's'}`;
                 const otherIdx = displayedProjects.length;
                 const bar = progressBar(otherCO2, totalProjectCO2, 15, c.dim);
+                const co2 = `${projectKgs[otherIdx].toFixed(2)}kg`.padStart(8);
                 console.log(
-                    `    ${bar} ${c.dim}${otherLabel.padEnd(22)}${c.reset} ${c.bold}${projectKgs[otherIdx].toFixed(2).padStart(6)}kg${c.reset}  ${c.dim}${projectPcts[otherIdx]}%${c.reset}`
+                    `    ${bar} ${c.dim}${otherLabel.padEnd(maxNameLen)}${c.reset} ${c.bold}${co2}${c.reset}  ${c.dim}${projectPcts[otherIdx]}%${c.reset}`
                 );
             }
             console.log('');
