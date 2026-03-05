@@ -411,7 +411,8 @@ export function getAggregateStats(db: Database, projectIdentifier?: string): Agg
 /**
  * Get project statistics for the last N days
  */
-export function getProjectStats(db: Database, days: number = 7): ProjectStats[] {
+export function getProjectStats(db: Database, days?: number): ProjectStats[] {
+    const whereClause = days != null ? `WHERE created_at >= DATE('now', '-' || ? || ' days')` : '';
     const stmt = db.prepare(`
         SELECT
             project_identifier,
@@ -420,12 +421,12 @@ export function getProjectStats(db: Database, days: number = 7): ProjectStats[] 
             SUM(energy_wh) as energy_wh,
             SUM(co2_grams) as co2_grams
         FROM sessions
-        WHERE created_at >= DATE('now', '-' || ? || ' days')
+        ${whereClause}
         GROUP BY project_identifier
         ORDER BY co2_grams DESC
     `);
 
-    const rows = stmt.all(days) as Record<string, unknown>[];
+    const rows = (days != null ? stmt.all(days) : stmt.all()) as Record<string, unknown>[];
 
     return rows.map((row) => ({
         projectPath: row.project_identifier as string,
@@ -511,6 +512,16 @@ export function deleteProjectConfig(db: Database, projectHash: string, key: stri
         projectHash,
         key
     );
+}
+
+/**
+ * Get the oldest session's created_at date from the database
+ */
+export function getOldestSessionDate(db: Database): string | null {
+    const row = db.prepare('SELECT MIN(created_at) as oldest FROM sessions').get() as {
+        oldest: string | null;
+    };
+    return row?.oldest ?? null;
 }
 
 /**

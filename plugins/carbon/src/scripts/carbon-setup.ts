@@ -9,6 +9,7 @@
 
 import '../utils/load-env';
 
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
@@ -29,7 +30,12 @@ import {
 } from '../data-store';
 import { resolveProjectIdentifier, shortHash } from '../project-identifier';
 import { saveSessionToDb } from '../session-db';
-import { findAllTranscripts, getSessionIdFromPath, parseSession } from '../session-parser';
+import {
+    findAllTranscripts,
+    getFirstTimestamp,
+    getSessionIdFromPath,
+    parseSession
+} from '../session-parser';
 import { syncUnsyncedSessions } from '../sync';
 import { getArgValue, hasFlag, validateName } from '../utils/args';
 import { generateMachineUserId } from '../utils/machine-id';
@@ -188,9 +194,43 @@ async function main(): Promise<void> {
             }
 
             if (shouldBackfill) {
-                console.log('  Backfilling historical sessions...');
-                const backfilled = backfillSessions(db);
-                console.log(`  Backfilled ${backfilled} historical session(s)`);
+                const transcripts = findAllTranscripts();
+                if (transcripts.length === 0) {
+                    console.log(
+                        '  No transcript files found — only future sessions will be tracked'
+                    );
+                } else {
+                    // Find oldest transcript date for reporting
+                    let oldestDate: Date | null = null;
+                    for (const t of transcripts) {
+                        try {
+                            const content = fs.readFileSync(t, 'utf-8');
+                            const lines = content.split('\n').filter((l) => l.trim());
+                            const ts = getFirstTimestamp(lines);
+                            if (ts && (!oldestDate || ts < oldestDate)) {
+                                oldestDate = ts;
+                            }
+                        } catch {
+                            // Skip unreadable files
+                        }
+                    }
+
+                    console.log('  Backfilling historical sessions...');
+                    const backfilled = backfillSessions(db);
+
+                    if (backfilled > 0 && oldestDate) {
+                        const dateStr = oldestDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        });
+                        console.log(
+                            `  Backfilled ${backfilled} session(s) starting from ${dateStr}`
+                        );
+                    } else {
+                        console.log(`  Backfilled ${backfilled} historical session(s)`);
+                    }
+                }
             }
         });
         console.log('');
