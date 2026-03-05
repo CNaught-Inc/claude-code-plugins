@@ -6,7 +6,7 @@ Update your display name for anonymous carbon tracking.
 
 ### Step 1: Ask for a new name
 
-Ask the user what they'd like their new display name to be. Let them know they can also skip to get a new randomly generated name (e.g., "Curious Penguin").
+Use the `AskUserQuestion` tool to ask what they'd like their new display name to be. Let them know they can also skip to get a new randomly generated name (e.g., "Curious Penguin").
 
 ### Step 2: Run the rename script
 
@@ -21,3 +21,7 @@ npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-user.ts
 ```
 
 Show the output to the user.
+
+## Notes
+
+- Always use the `AskUserQuestion` tool when asking the user a question

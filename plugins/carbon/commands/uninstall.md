@@ -6,7 +6,7 @@ Uninstall the CNaught carbon tracking plugin.
 
 ### Step 1: Confirm with the user
 
-Ask the user to confirm: "This will remove all carbon tracking data and the plugin configuration. Continue?"
+Use the `AskUserQuestion` tool to confirm: "This will remove all carbon tracking data and the plugin configuration. Continue?"
 
 - If **no**: Stop here.
 - If **yes**: Continue.
@@ -37,3 +37,7 @@ Then clean up global settings:
 ### Step 4: Confirm completion
 
 Let the user know the uninstall is complete and that they can re-install at any time by installing the plugin and running `/carbon:setup`.
+
+## Notes
+
+- Always use the `AskUserQuestion` tool when asking the user a question

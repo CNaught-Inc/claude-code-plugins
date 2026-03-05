@@ -86,3 +86,4 @@ Show the output to the user and confirm that the database is initialized, the st
 - Sessions are tracked automatically via hooks — no manual action needed
 - If sync is enabled, data syncs in the background after each response (non-blocking)
 - Use `/carbon:rename-project` to change the project name later
+- Always use the `AskUserQuestion` tool when asking the user a question
