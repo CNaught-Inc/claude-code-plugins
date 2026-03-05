@@ -221,7 +221,7 @@ function extractTimestamp(line: string): Date | null {
 /**
  * Get the timestamp from the first entry in the transcript (session start time)
  */
-function getFirstTimestamp(lines: string[]): Date | null {
+export function getFirstTimestamp(lines: string[]): Date | null {
     for (const line of lines) {
         const ts = extractTimestamp(line);
         if (ts) return ts;
@@ -357,7 +357,7 @@ export function parseSession(transcriptPath: string, rawProjectPath?: string): S
         }
     );
 
-    // Calculate model breakdown
+    // Calculate model breakdown (skip zero-token records, e.g. <synthetic>)
     const modelBreakdown: Record<string, number> = {};
     for (const record of allRecords) {
         const totalForRecord =
@@ -365,6 +365,7 @@ export function parseSession(transcriptPath: string, rawProjectPath?: string): S
             record.outputTokens +
             record.cacheCreationTokens +
             record.cacheReadTokens;
+        if (totalForRecord === 0) continue;
         modelBreakdown[record.model] = (modelBreakdown[record.model] ?? 0) + totalForRecord;
     }
 
