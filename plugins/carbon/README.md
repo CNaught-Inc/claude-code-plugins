@@ -6,9 +6,9 @@ Track carbon emissions from your Claude Code usage. See real-time CO₂ estimate
 
 - Estimates carbon emissions per session using the [Jegham et al.](https://arxiv.org/abs/2505.09598) methodology
 - Stores session data locally via SQLite (`~/.claude/carbon-tracker.db`)
-- Real-time status line showing session and all-time CO₂ emissions
+- Real-time status line showing CO₂ emissions and energy
 - Slash commands for setup, reporting, project renaming, and uninstalling
-- Optionally sync anonymous metrics to CNaught (no code or conversations shared)
+- Optionally sync anonymous metadata to CNaught (no conversation content is shared)
 
 ## Prerequisites
 
@@ -29,48 +29,18 @@ Add the marketplace and install the carbon plugin in Claude Code:
 
 Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
 
-### Local (development)
-
-To install from a local clone of this repo:
-
-```bash
-bun install
-```
-
-Then in Claude Code:
-
-```
-/plugin marketplace add /path/to/claude-code-plugins
-/plugin install carbon@cnaught-plugins
-```
-
-Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
-
-### Staging API (installed plugins)
-
-By default, the plugin points at the production API.
-
-If you've installed a local copy of the plugin, to point at the stage API, copy `.env.local.sample` to `.env.local` before running.
-
-If you have the plugin installed from GitHub and want to point at the staging API, add this to `~/.claude/settings.json`:
-
-```json
-{
-  "carbonTracker": {
-    "apiUrl": "https://api-stage.cnaught.com"
-  }
-}
-```
-
-Data is automatically stored in a separate database per API endpoint, so staging and production data never mix.
-
-### Updating
+## Updating
 
 Update the marketplace to fetch the latest available versions, then update the plugin:
 
 ```
 /plugin marketplace update cnaught-plugins
 /plugin update carbon@cnaught-plugins
+```
+
+Then you can run the following or just restart Claude Code:
+```
+/reload-plugins
 ```
 
 You can also manage all of this interactively via Claude Code's built-in `/plugin` command. We recommend enabling auto-update for the marketplace so you always have access to the latest versions — go to `/plugin` > **Marketplaces** > select the marketplace > **Enable auto-update**.
@@ -84,7 +54,7 @@ After installing, run `/carbon:setup` in any project. It walks you through:
 3. **Anonymous tracking** — optionally sync metrics to CNaught's API
 4. **Display name** — choose a name or get a random one (e.g., "Curious Penguin")
 
-Setup initializes the SQLite database, configures the CO₂ statusline in `.claude/settings.local.json`, and optionally enables background sync. Dependencies are installed automatically on first session start.
+Setup initializes the SQLite database, configures the CO₂ statusline, and optionally enables background sync. Dependencies are installed automatically on first session start.
 
 ## Commands
 
@@ -95,6 +65,7 @@ Setup initializes the SQLite database, configures the CO₂ statusline in `.clau
 | `/carbon:rename-project` | Change the project name (or reset to auto-detect) |
 | `/carbon:rename-user` | Change your display name for anonymous tracking |
 | `/carbon:uninstall` | Remove carbon tracking for the current project |
+| `/carbon:cleanup-cache` | Remove old cached plugin versions to free disk space |
 
 ### `/carbon:report`
 
@@ -110,29 +81,31 @@ Generates a report including:
 
 Removes tracking data for the current project. If no other projects have tracked sessions, the database and statusline config are also cleaned up. You can reinstall at any time.
 
+### `/carbon:cleanup-cache`
+
+Claude Code downloads each plugin version into a separate cache directory (`~/.claude/plugins/cache/`) but never removes old versions. Over time this accumulates stale copies that waste disk space. This command removes old cached versions, keeping the current version and the most recent prior version. This command will be deprecated once Claude Code implements auto-cleanup logic internally (https://github.com/anthropics/claude-code/issues/14980).
+
 ## Statusline
 
-Once set up, the status bar shows real-time CO₂:
+Once set up, the status bar shows real-time CO₂ emissions and energy
 
 ```
-🌱 Session: 0.42g / 12.35g CO₂ · org_repo_a1b2c3d4 · Curious Penguin · ✓ synced
+Climate Impact: CO₂ 2.73kg · Energy 9.10kWh ⇄
 ```
 
-| Segment | Description |
+| Component | Description |
 |---------|-------------|
-| `Session: 0.42g` | CO₂ for the current session |
-| `/ 12.35g CO₂` | All-time total for this project |
-| `org_repo_a1b2c3d4` | Project identifier (hidden for local-only projects) |
-| `Curious Penguin` | Your display name (shown when sync is enabled) |
-| `✓ synced` / `○ pending` | Sync status for the current session |
+| `CO₂ 2.73kg` | CO₂ emissions across all sessions and projects |
+| `Energy 9.10kWh` | Energy consumption across all sessions and projects |
+| `⇄` | Session sync status |
 
-The session value starts as a live estimate from context window tokens, then switches to the authoritative database value after the stop hook runs.
+If you have an existing statusline command configured, the Carbon plugin will do its best to append this statusline to the end of the existing one, separated by a `|`.
 
 ## How It Works
 
 The plugin uses Claude Code [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to track usage automatically:
 
-- **SessionStart** — installs dependencies if needed, initializes the database, auto-updates the statusline path if the plugin version changed, and batch-syncs any pending sessions
+- **SessionStart** — installs dependencies if needed, initializes the database, auto-updates the statusline path if the plugin version changed, and batch-syncs any unsynced sessions
 - **Stop** — parses the session transcript, calculates energy and CO₂, and saves to the local SQLite database. An async background sync runs if enabled (15s timeout, non-blocking).
 
 ### Carbon Calculation
@@ -158,11 +131,42 @@ The hash is the first 8 characters of SHA-256 of the project path, ensuring uniq
 
 ## Privacy
 
-When anonymous sync is enabled, the following metrics are sent to CNaught's API:
+When session sync is enabled, the following metrics are sent to CNaught's API:
 
 - Token counts (input, output, cache creation, cache read)
 - Energy consumption (Wh) and CO₂ emissions (g)
-- Model used and session timestamps
-- Project identifier and display name
+- Models used
+- Project identifier (custom display name if provided, otherwise automatically derived from github repository name)
 
 **No code, conversation content, or personal information is ever shared.** Sync can be disabled at any time by re-running `/carbon:setup`.
+
+## Plugin Development
+
+To install from a local clone of this repo:
+
+```bash
+bun install
+```
+
+Then in Claude Code:
+
+```
+/plugin marketplace add /path/to/claude-code-plugins
+/plugin install carbon@cnaught-plugins
+```
+
+Restart Claude Code and then run `/carbon:setup` to initialize the tracker.
+
+### Changing the API endpoint
+
+By default, the plugin points at the production API. You can change the API endpoint by adding this to `~/.claude/settings.json`:
+
+```json
+{
+  "carbonTracker": {
+    "apiUrl": "https://api-stage.cnaught.com"
+  }
+}
+```
+
+Data is automatically stored in a separate database per API endpoint, so different environments' data never mix.
