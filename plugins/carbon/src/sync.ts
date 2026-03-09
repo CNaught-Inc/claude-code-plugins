@@ -17,24 +17,37 @@ import {
     initializeDatabase,
     markSessionSyncFailed,
     markSessionsSynced,
-    openDatabase
+    openDatabase,
+    setConfig
 } from './data-store';
 import { log, logError } from './utils/stdin';
 
 /**
  * Read sync configuration from the database.
- * Returns null if sync is not enabled or config is incomplete.
+ * Returns null if sync is not enabled, config is incomplete, or organization is empty.
  */
 export function getSyncConfig(db: Database): SyncConfig | null {
     const enabled = getConfig(db, 'sync_enabled');
     if (enabled !== 'true') return null;
 
     const userId = getConfig(db, 'claude_code_user_id');
-    const userName = getConfig(db, 'claude_code_user_name');
+    if (!userId) return null;
 
-    if (!userId || !userName) return null;
+    // Organization is required for sync. Existing users who had sync_enabled=true
+    // but never set an organization will stop syncing until they re-run /carbon:setup.
+    const organization = getConfig(db, 'claude_code_organization') ?? '';
+    if (!organization) return null;
 
-    return { userId, userName };
+    return { userId, organization };
+}
+
+/**
+ * Store the teamId in the local database if present.
+ */
+function storeTeamId(db: Database, teamId: string | null): void {
+    if (teamId) {
+        setConfig(db, 'claude_code_team_id', teamId);
+    }
 }
 
 /**
@@ -47,9 +60,10 @@ export async function syncSession(db: Database, sessionId: string): Promise<void
     const session = getSession(db, sessionId);
     if (!session) return;
 
-    const success = await upsertSession(config, session);
-    if (success) {
+    const result = await upsertSession(config, session);
+    if (result.success) {
         markSessionsSynced(db, [sessionId]);
+        storeTeamId(db, result.teamId);
     } else {
         markSessionSyncFailed(db, [sessionId]);
     }
@@ -69,10 +83,11 @@ export async function syncUnsyncedSessions(db: Database): Promise<number> {
         const batch = getUnsyncedSessions(db, 100);
         if (batch.length === 0) break;
 
-        const success = await upsertSessions(config, batch);
+        const result = await upsertSessions(config, batch);
         const batchIds = batch.map((s) => s.sessionId);
-        if (success) {
+        if (result.success) {
             markSessionsSynced(db, batchIds);
+            storeTeamId(db, result.teamId);
             totalSynced += batch.length;
         } else {
             markSessionSyncFailed(db, batchIds);

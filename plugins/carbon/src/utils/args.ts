@@ -27,7 +27,7 @@ export function hasFlag(flag: string): boolean {
 }
 
 /**
- * Validate a user-provided name (display name or project name).
+ * Validate a user-provided name (e.g., organization name).
  * Returns an error message if invalid, or null if valid.
  */
 export function validateName(name: string, maxLength: number = MAX_NAME_LENGTH): string | null {

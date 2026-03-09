@@ -1,23 +1,17 @@
 # /carbon:rename-user
 
-Update your display name for anonymous carbon tracking.
+Update the organization name for anonymous carbon tracking.
 
 ## Instructions
 
-### Step 1: Ask for a new name
+### Step 1: Ask for an organization name
 
-Use the `AskUserQuestion` tool to ask what they'd like their new display name to be. Let them know they can also skip to get a new randomly generated name (e.g., "Curious Penguin").
+Use the `AskUserQuestion` tool to ask what company or organization name they'd like to use. This is the name associated with their synced sessions.
 
 ### Step 2: Run the rename script
 
-If the user provided a name:
 ```bash
-npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-user.ts --name "Their Name"
-```
-
-If the user wants a random name:
-```bash
-npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-user.ts
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-user.ts --name "Their Organization"
 ```
 
 Show the output to the user.

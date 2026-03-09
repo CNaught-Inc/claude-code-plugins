@@ -49,10 +49,9 @@ You can also manage all of this interactively via Claude Code's built-in `/plugi
 
 After installing, run `/carbon:setup` in any project. It walks you through:
 
-1. **Project name** — defaults to your GitHub repo (e.g., `org/repo`), or set a custom name
-2. **Historical sessions** — start fresh or backfill from existing transcript files on disk
-3. **Anonymous tracking** — optionally sync metrics to CNaught's API
-4. **Display name** — choose a name or get a random one (e.g., "Curious Penguin")
+1. **Historical sessions** — start fresh or backfill from existing transcript files on disk
+2. **Anonymous tracking** — optionally sync metrics to CNaught's API
+3. **Organization** — optionally provide your company or organization name
 
 Setup initializes the SQLite database, configures the CO₂ statusline, and optionally enables background sync. Dependencies are installed automatically on first session start.
 
@@ -62,8 +61,7 @@ Setup initializes the SQLite database, configures the CO₂ statusline, and opti
 |---------|-------------|
 | `/carbon:setup` | Initialize and configure the plugin |
 | `/carbon:report` | Generate a carbon emissions report |
-| `/carbon:rename-project` | Change the project name (or reset to auto-detect) |
-| `/carbon:rename-user` | Change your display name for anonymous tracking |
+| `/carbon:rename-user` | Change your organization name for anonymous tracking |
 | `/carbon:uninstall` | Remove carbon tracking for the current project |
 | `/carbon:cleanup-cache` | Remove old cached plugin versions to free disk space |
 
@@ -75,7 +73,7 @@ Generates a report including:
 - **Relatable equivalents** — car-years off road, days of home energy usage
 - **Usage by model** — breakdown by Claude model with visual progress bars
 - **Project breakdown** — top projects from the last 30 days (shown when multiple projects exist)
-- **Anonymous sync info** — display name and pending sync count (when sync is enabled)
+- **Anonymous sync info** — organization name and pending sync count (when sync is enabled)
 
 ### `/carbon:uninstall`
 
@@ -121,13 +119,7 @@ Per-model configs (Haiku, Sonnet, Opus) capture GPU power draw, utilization boun
 
 ### Project Identification
 
-Projects are identified automatically with this priority:
-
-1. **Custom name** (via `/carbon:setup` or `/carbon:rename-project`) — `<name>_<hash>`
-2. **Git remote** — `<org>_<repo>_<hash>` (e.g., `cnaught_claude-code-plugins_a1b2c3d4`)
-3. **Local fallback** — `local_<hash>`
-
-The hash is the first 8 characters of SHA-256 of the project path, ensuring uniqueness across machines.
+Projects are identified by a hash of the project path — the first 8 characters of SHA-256. This ensures a stable, unique identifier across machines.
 
 ## Privacy
 
@@ -136,7 +128,7 @@ When session sync is enabled, the following metrics are sent to CNaught's API:
 - Token counts (input, output, cache creation, cache read)
 - Energy consumption (Wh) and CO₂ emissions (g)
 - Models used
-- Project identifier (custom display name if provided, otherwise automatically derived from github repository name)
+- Project identifier (hash of project path)
 
 **No code, conversation content, or personal information is ever shared.** Sync can be disabled at any time by re-running `/carbon:setup`.
 

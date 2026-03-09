@@ -21,7 +21,7 @@ function getSessionStatsFromDb(sessionId: string): { co2Grams: number; energyWh:
     });
 }
 
-function getSyncInfo(): { enabled: boolean; userName: string | null; userId: string | null } {
+function getSyncInfo(): { enabled: boolean; organization: string | null; userId: string | null } {
     return (
         queryReadonlyDb((db) => {
             const get = (key: string) => {
@@ -33,10 +33,10 @@ function getSyncInfo(): { enabled: boolean; userName: string | null; userId: str
             const enabled = get('sync_enabled') === 'true';
             return {
                 enabled,
-                userName: enabled ? get('claude_code_user_name') : null,
+                organization: enabled ? get('claude_code_organization') : null,
                 userId: enabled ? get('claude_code_user_id') : null
             };
-        }) ?? { enabled: false, userName: null, userId: null }
+        }) ?? { enabled: false, organization: null, userId: null }
     );
 }
 
@@ -138,7 +138,7 @@ export function getCarbonOutput(input: StatuslineInput): string {
 
     let syncSuffix = '';
     const syncInfo = getSyncInfo();
-    if (syncInfo.enabled && syncInfo.userName && syncInfo.userId) {
+    if (syncInfo.enabled && syncInfo.userId) {
         const syncStatus = input.session_id ? getSessionSyncStatus(input.session_id) : null;
         const green = '\x1b[38;2;50;205;50m'; // Lime green #32CD32
         const red = '\x1b[38;2;208;83;63m'; // Brand orange #D0533F

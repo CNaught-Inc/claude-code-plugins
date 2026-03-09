@@ -9,7 +9,7 @@ mock.module('../data-store.js', () => ({
 }));
 
 mock.module('../project-identifier.js', () => ({
-    resolveProjectIdentifier: () => `test_project_abcd1234`
+    resolveProjectIdentifier: () => `abcd1234`
 }));
 
 const { getCarbonOutput } = await import('./carbon-output');
@@ -182,7 +182,7 @@ describe('getCarbonOutput sync display', () => {
             .mockReturnValueOnce(null)
             .mockReturnValueOnce({
                 enabled: true,
-                userName: 'Curious Penguin',
+                organization: 'Curious Penguin',
                 userId: 'abcd1234-5678'
             })
             .mockReturnValueOnce('synced');
@@ -200,7 +200,7 @@ describe('getCarbonOutput sync display', () => {
             .mockReturnValueOnce(null)
             .mockReturnValueOnce({
                 enabled: true,
-                userName: 'Curious Penguin',
+                organization: 'Curious Penguin',
                 userId: 'abcd1234-5678'
             })
             .mockReturnValueOnce('dirty');
@@ -218,7 +218,7 @@ describe('getCarbonOutput sync display', () => {
             .mockReturnValueOnce(null)
             .mockReturnValueOnce({
                 enabled: true,
-                userName: 'Swift Falcon',
+                organization: 'Swift Falcon',
                 userId: 'efgh5678-9012'
             })
             .mockReturnValueOnce('failed');
@@ -236,7 +236,7 @@ describe('getCarbonOutput sync display', () => {
             .mockReturnValueOnce(null)
             .mockReturnValueOnce({
                 enabled: true,
-                userName: 'Swift Falcon',
+                organization: 'Swift Falcon',
                 userId: 'efgh5678-9012'
             })
             .mockReturnValueOnce('pending');
@@ -251,7 +251,7 @@ describe('getCarbonOutput sync display', () => {
             .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
             .mockReturnValueOnce(null)
             .mockReturnValueOnce(null)
-            .mockReturnValueOnce({ enabled: false, userName: null, userId: null });
+            .mockReturnValueOnce({ enabled: false, organization: null, userId: null });
 
         const result = getCarbonOutput({ session_id: 'test-session' });
 
@@ -265,7 +265,7 @@ describe('getCarbonOutput sync display', () => {
         // Call 3: getSyncInfo returns enabled
         mockQueryReadonlyDb.mockReturnValueOnce(5).mockReturnValueOnce(2).mockReturnValueOnce({
             enabled: true,
-            userName: 'Curious Penguin',
+            organization: 'Curious Penguin',
             userId: 'abcd1234-5678'
         });
 
@@ -284,15 +284,16 @@ describe('getCarbonOutput sync display', () => {
         expect(result).not.toContain('\u21C4');
     });
 
-    it('does not show sync info when userName is missing', () => {
+    it('shows sync arrows even when organization is missing', () => {
         mockQueryReadonlyDb
             .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
             .mockReturnValueOnce(null)
             .mockReturnValueOnce(null)
-            .mockReturnValueOnce({ enabled: true, userName: null, userId: 'abcd1234' });
+            .mockReturnValueOnce({ enabled: true, organization: null, userId: 'abcd1234' })
+            .mockReturnValueOnce('synced');
 
         const result = getCarbonOutput({ session_id: 'test-session' });
 
-        expect(result).not.toContain('\u21C4');
+        expect(result).toContain('\u21C4');
     });
 });

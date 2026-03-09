@@ -218,6 +218,43 @@ export const MIGRATIONS: Migration[] = [
                 db.run('ALTER TABLE sessions DROP COLUMN needs_sync');
             }
         }
+    },
+    {
+        version: 6,
+        description: 'Rename user name to organization, simplify project identifiers to hash only',
+        up: (db) => {
+            // Rename claude_code_user_name → claude_code_organization in plugin_config
+            db.run(
+                "UPDATE plugin_config SET key = 'claude_code_organization' WHERE key = 'claude_code_user_name'"
+            );
+
+            // Simplify project_identifier to just the 8-char hash (strip org_repo_ or local_ prefix)
+            // The hash is always the last 8 chars of the identifier
+            db.run(
+                'UPDATE sessions SET project_identifier = substr(project_identifier, -8) WHERE length(project_identifier) > 8'
+            );
+
+            // For sessions with empty project_identifier, compute hash from project_path
+            const emptyRows = db
+                .prepare(
+                    "SELECT session_id, project_path FROM sessions WHERE project_identifier = '' OR project_identifier IS NULL"
+                )
+                .all() as { session_id: string; project_path: string }[];
+            for (const row of emptyRows) {
+                const hash = crypto
+                    .createHash('sha256')
+                    .update(row.project_path)
+                    .digest('hex')
+                    .slice(0, 8);
+                db.prepare('UPDATE sessions SET project_identifier = ? WHERE session_id = ?').run(
+                    hash,
+                    row.session_id
+                );
+            }
+
+            // Remove project_name entries from project_config (no longer used)
+            db.run("DELETE FROM project_config WHERE key = 'project_name'");
+        }
     }
 ];
 
@@ -225,6 +262,8 @@ export const MIGRATIONS: Migration[] = [
  * Check if a column exists on a table (useful for idempotent migrations)
  */
 export function columnExists(db: Database, table: string, column: string): boolean {
+    // PRAGMA doesn't support parameterized binding, so interpolation is required here.
+    // All callers pass hardcoded table names.
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
     return cols.some((c) => c.name === column);
 }
