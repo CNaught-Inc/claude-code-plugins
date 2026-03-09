@@ -8,6 +8,7 @@ import '../utils/load-env';
 
 import type { Database } from 'bun:sqlite';
 
+import { getDashboardUrl } from '../api-client';
 import { getModelConfig, MILES_PER_KG_CO2 } from '../carbon-calculator';
 import {
     getAggregateStats,
@@ -178,8 +179,11 @@ async function main(): Promise<void> {
                     oldestSessionDate: getOldestSessionDate(db),
                     syncInfo: {
                         enabled: syncEnabled,
-                        userName: syncEnabled ? getConfig(db, 'claude_code_user_name') : null,
+                        organization: syncEnabled
+                            ? getConfig(db, 'claude_code_organization')
+                            : null,
                         userId: syncEnabled ? getConfig(db, 'claude_code_user_id') : null,
+                        teamId: syncEnabled ? getConfig(db, 'claude_code_team_id') : null,
                         pendingCount: syncEnabled ? getUnsyncedSessions(db, 1000).length : 0
                     }
                 };
@@ -191,7 +195,7 @@ async function main(): Promise<void> {
         // ── Header ────────────────────────────────────────────
         console.log('');
         console.log(`${c.bold}  ╔══════════════════════════════════════════════════╗${c.reset}`);
-        console.log(`${c.bold}  ║              Climate Impact Report               ║${c.reset}`);
+        console.log(`${c.bold}  ║       [Cø] CNaught Climate Impact Report         ║${c.reset}`);
         console.log(`${c.bold}  ╚══════════════════════════════════════════════════╝${c.reset}`);
         console.log('');
 
@@ -335,7 +339,14 @@ async function main(): Promise<void> {
             console.log(`${c.bold}  Sync${c.reset}`);
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
-            console.log(`    ${c.dim}Name:${c.reset}          ${syncInfo.userName || 'Unknown'}`);
+            if (syncInfo.organization) {
+                console.log(`    ${c.dim}Organization:${c.reset}  ${syncInfo.organization}`);
+            }
+            if (syncInfo.teamId) {
+                console.log(
+                    `    ${c.dim}Dashboard:${c.reset}     ${getDashboardUrl(syncInfo.teamId)}`
+                );
+            }
             if (syncInfo.pendingCount > 0) {
                 console.log(
                     `    ${c.dim}Pending sync:${c.reset}  ${syncInfo.pendingCount} session(s)`
@@ -345,22 +356,7 @@ async function main(): Promise<void> {
         }
 
         // ── Footer ────────────────────────────────────────────
-        const now = new Date();
-        const timestamp = now.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-        console.log(`${c.gray}  Last updated: ${timestamp}${c.reset}`);
         console.log(`${c.gray}  DB: ${getDatabasePath()}${c.reset}`);
-        console.log(`${c.bold}  ╔══════════════════════════════════════════════════╗${c.reset}`);
-        console.log(
-            `${c.bold}  ║${c.reset}  ${c.bold}[Cø]${c.reset} ${c.gray}Powered by CNaught${c.reset}                         ${c.bold}║${c.reset}`
-        );
-        console.log(`${c.bold}  ╚══════════════════════════════════════════════════╝${c.reset}`);
         console.log('');
     } catch (error) {
         logError('Failed to generate report', error);

@@ -16,19 +16,18 @@ import {
     getConfig,
     getDatabasePath,
     getInstalledAt,
-    getProjectConfig,
     queryReadonlyDb
 } from '../data-store';
-import { shortHash } from '../project-identifier';
+import { resolveProjectIdentifier } from '../project-identifier';
 import { isCarbonStatusLine } from './setup-helpers';
 
 interface SetupCheckResult {
     isSetup: boolean;
     installedAt?: string;
     syncEnabled?: boolean;
-    userName?: string;
+    organization?: string;
     userId?: string;
-    projectName?: string | null;
+    projectId?: string;
     statusLineConfigured?: boolean;
 }
 
@@ -57,19 +56,18 @@ function main(): void {
             return { isSetup: false };
         }
 
-        const projectHash = shortHash(process.cwd());
-        const projectName = getProjectConfig(db, projectHash, 'project_name');
+        const projectId = resolveProjectIdentifier(process.cwd());
         const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
-        const userName = getConfig(db, 'claude_code_user_name');
+        const organization = getConfig(db, 'claude_code_organization');
         const userId = getConfig(db, 'claude_code_user_id');
 
         return {
             isSetup: true,
             installedAt: installedAt.toISOString(),
             syncEnabled,
-            userName: userName ?? undefined,
+            organization: organization ?? undefined,
             userId: userId ?? undefined,
-            projectName: projectName ?? null,
+            projectId,
             statusLineConfigured: checkStatusLine()
         };
     });

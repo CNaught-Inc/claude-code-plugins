@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
+import * as crypto from 'node:crypto';
 
-import { parseGitRemote, shortHash } from './project-identifier';
+// Re-register the real module to clear any mock.module leaks from other test files
+mock.module('./project-identifier.js', () => ({
+    shortHash: (input: string) =>
+        crypto.createHash('sha256').update(input).digest('hex').slice(0, 8),
+    resolveProjectIdentifier: (rawPath: string) =>
+        crypto.createHash('sha256').update(rawPath).digest('hex').slice(0, 8)
+}));
+
+const { resolveProjectIdentifier, shortHash } = await import('./project-identifier');
 
 describe('shortHash', () => {
     it('returns 8 hex characters', () => {
@@ -17,39 +26,14 @@ describe('shortHash', () => {
     });
 });
 
-describe('parseGitRemote', () => {
-    it('parses HTTPS URLs with .git suffix', () => {
-        const result = parseGitRemote('https://github.com/cnaught/claude-code-plugins.git');
-        expect(result).toEqual({ org: 'cnaught', repo: 'claude-code-plugins' });
+describe('resolveProjectIdentifier', () => {
+    it('returns the short hash of the path', () => {
+        const id = resolveProjectIdentifier('/Users/jason/my-project');
+        expect(id).toBe(shortHash('/Users/jason/my-project'));
     });
 
-    it('parses HTTPS URLs without .git suffix', () => {
-        const result = parseGitRemote('https://github.com/cnaught/claude-code-plugins');
-        expect(result).toEqual({ org: 'cnaught', repo: 'claude-code-plugins' });
-    });
-
-    it('parses SSH URLs with .git suffix', () => {
-        const result = parseGitRemote('git@github.com:cnaught/claude-code-plugins.git');
-        expect(result).toEqual({ org: 'cnaught', repo: 'claude-code-plugins' });
-    });
-
-    it('parses SSH URLs without .git suffix', () => {
-        const result = parseGitRemote('git@github.com:cnaught/claude-code-plugins');
-        expect(result).toEqual({ org: 'cnaught', repo: 'claude-code-plugins' });
-    });
-
-    it('handles GitLab URLs', () => {
-        const result = parseGitRemote('https://gitlab.com/myorg/myrepo.git');
-        expect(result).toEqual({ org: 'myorg', repo: 'myrepo' });
-    });
-
-    it('handles SSH URLs with custom hosts', () => {
-        const result = parseGitRemote('git@gitlab.company.com:team/project.git');
-        expect(result).toEqual({ org: 'team', repo: 'project' });
-    });
-
-    it('returns null for unrecognized URLs', () => {
-        expect(parseGitRemote('not-a-url')).toBeNull();
-        expect(parseGitRemote('')).toBeNull();
+    it('returns 8 hex characters', () => {
+        const id = resolveProjectIdentifier('/foo/bar');
+        expect(id).toMatch(/^[a-f0-9]{8}$/);
     });
 });

@@ -39,7 +39,7 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
         sessionId: 'session-1',
         projectPath: '/test/project',
-        projectIdentifier: 'test_project_abcd1234',
+        projectIdentifier: 'abcd1234',
         inputTokens: 1000,
         outputTokens: 500,
         cacheCreationTokens: 200,
@@ -215,7 +215,7 @@ describe('getAggregateStats with project filtering', () => {
             db,
             makeSession({
                 sessionId: 's1',
-                projectIdentifier: 'org_project-a_aaaa1111',
+                projectIdentifier: 'aaaa1111',
                 totalTokens: 1000,
                 co2Grams: 0.05
             })
@@ -224,18 +224,18 @@ describe('getAggregateStats with project filtering', () => {
             db,
             makeSession({
                 sessionId: 's2',
-                projectIdentifier: 'org_project-b_bbbb2222',
+                projectIdentifier: 'bbbb2222',
                 totalTokens: 2000,
                 co2Grams: 0.1
             })
         );
 
-        const statsA = getAggregateStats(db, 'org_project-a_aaaa1111');
+        const statsA = getAggregateStats(db, 'aaaa1111');
         expect(statsA.totalSessions).toBe(1);
         expect(statsA.totalTokens).toBe(1000);
         expect(statsA.totalCO2Grams).toBeCloseTo(0.05);
 
-        const statsB = getAggregateStats(db, 'org_project-b_bbbb2222');
+        const statsB = getAggregateStats(db, 'bbbb2222');
         expect(statsB.totalSessions).toBe(1);
         expect(statsB.totalTokens).toBe(2000);
         expect(statsB.totalCO2Grams).toBeCloseTo(0.1);
@@ -250,10 +250,7 @@ describe('getAggregateStats with project filtering', () => {
 
     it('returns zeroes for unknown project', () => {
         const db = createTestDb();
-        upsertSession(
-            db,
-            makeSession({ sessionId: 's1', projectIdentifier: 'org_project-a_aaaa1111' })
-        );
+        upsertSession(db, makeSession({ sessionId: 's1', projectIdentifier: 'aaaa1111' }));
 
         const stats = getAggregateStats(db, 'nonexistent');
         expect(stats.totalSessions).toBe(0);
@@ -410,7 +407,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's1',
-                projectIdentifier: 'org_project-a_aaaa1111',
+                projectIdentifier: 'aaaa1111',
                 totalTokens: 1000,
                 energyWh: 0.05,
                 co2Grams: 0.015,
@@ -422,7 +419,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's2',
-                projectIdentifier: 'org_project-b_bbbb2222',
+                projectIdentifier: 'bbbb2222',
                 totalTokens: 2000,
                 energyWh: 0.1,
                 co2Grams: 0.03,
@@ -434,7 +431,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's3',
-                projectIdentifier: 'org_project-b_bbbb2222',
+                projectIdentifier: 'bbbb2222',
                 totalTokens: 3000,
                 energyWh: 0.15,
                 co2Grams: 0.045,
@@ -447,12 +444,12 @@ describe('getProjectStats', () => {
         expect(stats).toHaveLength(2);
 
         // Sorted by CO2 desc, so project-b first
-        expect(stats[0].projectPath).toBe('org_project-b_bbbb2222');
+        expect(stats[0].projectPath).toBe('bbbb2222');
         expect(stats[0].sessions).toBe(2);
         expect(stats[0].tokens).toBe(5000);
         expect(stats[0].co2Grams).toBeCloseTo(0.075);
 
-        expect(stats[1].projectPath).toBe('org_project-a_aaaa1111');
+        expect(stats[1].projectPath).toBe('aaaa1111');
         expect(stats[1].sessions).toBe(1);
         expect(stats[1].tokens).toBe(1000);
 
@@ -529,6 +526,85 @@ describe('migrations', () => {
 
         const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
         expect(row.user_version).toBe(MIGRATIONS.length);
+        db.close();
+    });
+
+    it('migration v6 renames user_name to organization in plugin_config', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+
+        // Simulate pre-v6 state: insert old key name, rewind to v5
+        setConfig(db, 'claude_code_user_name', 'My Org');
+        db.run('PRAGMA user_version = 5');
+
+        initializeDatabase(db);
+
+        expect(getConfig(db, 'claude_code_organization')).toBe('My Org');
+        expect(getConfig(db, 'claude_code_user_name')).toBeNull();
+        db.close();
+    });
+
+    it('migration v6 truncates project identifiers to 8-char hash', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+
+        // Insert sessions with old-format identifiers
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                projectIdentifier: 'cnaught_my-repo_a1b2c3d4'
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's2',
+                projectIdentifier: 'local_e5f6a7b8'
+            })
+        );
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's3',
+                projectIdentifier: 'abcd1234'
+            })
+        );
+
+        // Rewind to v5 and re-run migrations
+        db.run('PRAGMA user_version = 5');
+        initializeDatabase(db);
+
+        const s1 = getSession(db, 's1');
+        const s2 = getSession(db, 's2');
+        const s3 = getSession(db, 's3');
+
+        expect(s1?.projectIdentifier).toBe('a1b2c3d4');
+        expect(s2?.projectIdentifier).toBe('e5f6a7b8');
+        expect(s3?.projectIdentifier).toBe('abcd1234');
+        db.close();
+    });
+
+    it('migration v6 computes hash for sessions with empty project_identifier', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+
+        // Insert a session then clear its project_identifier to simulate pre-v2 data
+        upsertSession(
+            db,
+            makeSession({
+                sessionId: 's1',
+                projectPath: '/Users/test/my-project',
+                projectIdentifier: 'placeholder'
+            })
+        );
+        db.run("UPDATE sessions SET project_identifier = '' WHERE session_id = 's1'");
+
+        db.run('PRAGMA user_version = 5');
+        initializeDatabase(db);
+
+        const s1 = getSession(db, 's1');
+        expect(s1?.projectIdentifier).toMatch(/^[a-f0-9]{8}$/);
         db.close();
     });
 });
@@ -750,7 +826,7 @@ describe('configureSyncTracking sync_status behavior', () => {
         // Simulate first-time sync enable without backfill
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'test-user-id');
-        setConfig(db, 'claude_code_user_name', 'Test User');
+        setConfig(db, 'claude_code_organization', 'Test Org');
         db.run("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
 
         // Existing sessions should no longer need sync
@@ -769,7 +845,7 @@ describe('configureSyncTracking sync_status behavior', () => {
         // Simulate already-configured sync
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'existing-user-id');
-        setConfig(db, 'claude_code_user_name', 'Existing User');
+        setConfig(db, 'claude_code_organization', 'Existing Org');
 
         // Add sessions that haven't synced yet
         upsertSession(db, makeSession({ sessionId: 's1' }));

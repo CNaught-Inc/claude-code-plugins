@@ -1,29 +1,11 @@
 # /carbon:rename-project
 
-Update the project name used for carbon tracking.
+This command has been removed. Project IDs are now automatically generated from the project path and cannot be customized.
 
 ## Instructions
 
-### Step 1: Ask for a new project name
+Let the user know that project IDs are now automatically generated as a hash of the project path. There is no need to set or rename project names. Show them their current project ID by running:
 
-Use the `AskUserQuestion` tool to ask what they'd like to name this project. Let them know that by default, the project is identified by the GitHub repo (e.g., `cnaught/claude-code-plugins`) if available, otherwise it falls back to a local hash. They can provide a custom name to override this.
-
-If they want to reset to the default (auto-detected from git), they can say "reset" or "default".
-
-### Step 2: Run the rename-project script
-
-If the user provided a name:
 ```bash
-npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-project.ts --name "Their Project Name"
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-setup-check.ts
 ```
-
-If the user wants to reset to the default:
-```bash
-npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbon-rename-project.ts --reset
-```
-
-Show the output to the user.
-
-## Notes
-
-- Always use the `AskUserQuestion` tool when asking the user a question

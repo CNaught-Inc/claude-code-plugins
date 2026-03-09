@@ -1,15 +1,13 @@
 /**
- * Carbon Rename Script
+ * Carbon Rename User Script
  *
- * Updates the display name for anonymous carbon tracking.
+ * Updates the organization name for anonymous carbon tracking.
  *
  * Usage:
- *   carbon-rename.js --name "New Name"
+ *   carbon-rename-user.ts --name "New Organization"
  */
 
 import '../utils/load-env';
-
-import { adjectives, animals, uniqueNamesGenerator } from 'unique-names-generator';
 
 import { getConfig, initializeDatabase, openDatabase, setConfig } from '../data-store';
 import { getArgValue, validateName } from '../utils/args';
@@ -18,12 +16,15 @@ import { logError } from '../utils/stdin';
 function main(): void {
     const newName = getArgValue('--name');
 
-    if (newName !== null) {
-        const error = validateName(newName);
-        if (error) {
-            console.error(`Display name: ${error}`);
-            process.exit(1);
-        }
+    if (newName === null) {
+        console.log('Error: provide --name "Organization Name"');
+        process.exit(1);
+    }
+
+    const error = validateName(newName, 100);
+    if (error) {
+        console.error(`Organization: ${error}`);
+        process.exit(1);
     }
 
     const db = openDatabase();
@@ -38,24 +39,16 @@ function main(): void {
             return;
         }
 
-        const oldName = getConfig(db, 'claude_code_user_name') || 'Unknown';
-        const displayName =
-            newName ||
-            uniqueNamesGenerator({
-                dictionaries: [adjectives, animals],
-                separator: ' ',
-                style: 'capital'
-            });
+        const oldOrg = getConfig(db, 'claude_code_organization') || '';
+        setConfig(db, 'claude_code_organization', newName);
 
-        setConfig(db, 'claude_code_user_name', displayName);
-
-        if (newName) {
-            console.log(`Renamed from "${oldName}" to "${displayName}".`);
+        if (oldOrg) {
+            console.log(`Updated organization from "${oldOrg}" to "${newName}".`);
         } else {
-            console.log(`Renamed from "${oldName}" to "${displayName}" (randomly generated).`);
+            console.log(`Organization set to "${newName}".`);
         }
     } catch (error) {
-        logError('Failed to rename', error);
+        logError('Failed to update organization', error);
     } finally {
         db.close();
     }

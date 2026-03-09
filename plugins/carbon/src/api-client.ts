@@ -18,7 +18,7 @@ export const DEFAULT_API_URL = 'https://api.cnaught.com';
 
 export interface SyncConfig {
     userId: string;
-    userName: string;
+    organization: string;
 }
 
 /**
@@ -53,11 +53,11 @@ export function getGraphqlUrl(): string {
 }
 
 /**
- * Get the emissions dashboard URL for a given user.
+ * Get the emissions dashboard URL for a given team.
  * Points to the API redirect endpoint which forwards to the correct frontend.
  */
-export function getDashboardUrl(userId: string): string {
-    return `${getApiUrl()}/claude-code-emissions/${userId}`;
+export function getDashboardUrl(teamId: string): string {
+    return `${getApiUrl()}/claude-code-emissions/${teamId}`;
 }
 
 /**
@@ -118,7 +118,7 @@ function sessionToInput(config: SyncConfig, session: SessionRecord) {
     return {
         sessionId: session.sessionId,
         claudeCodeUserId: config.userId,
-        claudeCodeUserName: config.userName,
+        claudeCodeUserName: config.organization,
         projectPath: session.projectIdentifier || session.projectPath,
         co2Grams: session.co2Grams,
         totalInputTokens: session.inputTokens,
@@ -136,6 +136,7 @@ const UPSERT_SESSION_MUTATION = `
     mutation UpsertClaudeCodeSession($input: UpsertClaudeCodeSessionInput!) {
         upsertClaudeCodeSession(input: $input) {
             id
+            claudeCodeUser { claudeCodeTeamId }
         }
     }
 `;
@@ -144,16 +145,30 @@ const UPSERT_SESSIONS_MUTATION = `
     mutation UpsertClaudeCodeSessions($input: UpsertClaudeCodeSessionsInput!) {
         upsertClaudeCodeSessions(input: $input) {
             id
+            claudeCodeUser { claudeCodeTeamId }
         }
     }
 `;
 
+export interface UpsertResult {
+    success: boolean;
+    teamId: string | null;
+}
+
 /**
  * Upsert a single session to the CNaught API.
- * Returns true on success, false on failure.
+ * Returns success status and the teamId from the API response.
  */
-export async function upsertSession(config: SyncConfig, session: SessionRecord): Promise<boolean> {
-    const result = await graphqlRequest(UPSERT_SESSION_MUTATION, {
+export async function upsertSession(
+    config: SyncConfig,
+    session: SessionRecord
+): Promise<UpsertResult> {
+    const result = await graphqlRequest<{
+        upsertClaudeCodeSession: {
+            id: string;
+            claudeCodeUser: { claudeCodeTeamId: string | null };
+        };
+    }>(UPSERT_SESSION_MUTATION, {
         input: sessionToInput(config, session)
     });
 
@@ -161,28 +176,36 @@ export async function upsertSession(config: SyncConfig, session: SessionRecord):
         log(`Synced session ${session.sessionId}`);
     }
 
-    return result !== null;
+    return {
+        success: result !== null,
+        teamId: result?.upsertClaudeCodeSession?.claudeCodeUser?.claudeCodeTeamId ?? null
+    };
 }
 
 /**
  * Batch upsert multiple sessions to the CNaught API.
  * Sessions are sent in a single request (max 100 per API constraint).
- * Returns true on success, false on failure.
+ * Returns success status and the teamId from the API response.
  */
 export async function upsertSessions(
     config: SyncConfig,
     sessions: SessionRecord[]
-): Promise<boolean> {
-    if (sessions.length === 0) return true;
+): Promise<UpsertResult> {
+    if (sessions.length === 0) return { success: true, teamId: null };
     if (sessions.length > 100) {
         logError(`Batch size ${sessions.length} exceeds limit of 100`);
-        return false;
+        return { success: false, teamId: null };
     }
 
-    const result = await graphqlRequest(UPSERT_SESSIONS_MUTATION, {
+    const result = await graphqlRequest<{
+        upsertClaudeCodeSessions: {
+            id: string;
+            claudeCodeUser: { claudeCodeTeamId: string | null };
+        }[];
+    }>(UPSERT_SESSIONS_MUTATION, {
         input: {
             claudeCodeUserId: config.userId,
-            claudeCodeUserName: config.userName,
+            claudeCodeUserName: config.organization,
             sessions: sessions.map((s) => ({
                 sessionId: s.sessionId,
                 projectPath: s.projectIdentifier || s.projectPath,
@@ -203,5 +226,9 @@ export async function upsertSessions(
         log(`Synced ${sessions.length} session(s)`);
     }
 
-    return result !== null;
+    return {
+        success: result !== null,
+        // All sessions in a batch belong to the same user/team, so the first result's teamId is representative
+        teamId: result?.upsertClaudeCodeSessions?.[0]?.claudeCodeUser?.claudeCodeTeamId ?? null
+    };
 }
