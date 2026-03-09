@@ -51,7 +51,7 @@ After installing, run `/carbon:setup` in any project. It walks you through:
 
 1. **Historical sessions** — start fresh or backfill from existing transcript files on disk
 2. **Anonymous tracking** — optionally sync metrics to CNaught's API
-3. **Organization** — optionally provide your company or organization name
+3. **Team** — optionally provide your team name
 
 Setup initializes the SQLite database, configures the CO₂ statusline, and optionally enables background sync. Dependencies are installed automatically on first session start.
 
@@ -61,7 +61,7 @@ Setup initializes the SQLite database, configures the CO₂ statusline, and opti
 |---------|-------------|
 | `/carbon:setup` | Initialize and configure the plugin |
 | `/carbon:report` | Generate a carbon emissions report |
-| `/carbon:rename-user` | Change your organization name for anonymous tracking |
+| `/carbon:rename-team` | Change your team name for anonymous tracking |
 | `/carbon:uninstall` | Remove carbon tracking for the current project |
 | `/carbon:cleanup-cache` | Remove old cached plugin versions to free disk space |
 
@@ -73,7 +73,7 @@ Generates a report including:
 - **Relatable equivalents** — car-years off road, days of home energy usage
 - **Usage by model** — breakdown by Claude model with visual progress bars
 - **Project breakdown** — top projects from the last 30 days (shown when multiple projects exist)
-- **Anonymous sync info** — organization name and pending sync count (when sync is enabled)
+- **Anonymous sync info** — team name and pending sync count (when sync is enabled)
 
 ### `/carbon:uninstall`
 

@@ -18,7 +18,8 @@ export const DEFAULT_API_URL = 'https://api.cnaught.com';
 
 export interface SyncConfig {
     userId: string;
-    organization: string;
+    userName: string;
+    team: string;
 }
 
 /**
@@ -118,7 +119,8 @@ function sessionToInput(config: SyncConfig, session: SessionRecord) {
     return {
         sessionId: session.sessionId,
         claudeCodeUserId: config.userId,
-        claudeCodeUserName: config.organization,
+        claudeCodeUserName: config.userName,
+        claudeCodeTeamName: config.team,
         projectPath: session.projectIdentifier || session.projectPath,
         co2Grams: session.co2Grams,
         totalInputTokens: session.inputTokens,
@@ -205,7 +207,8 @@ export async function upsertSessions(
     }>(UPSERT_SESSIONS_MUTATION, {
         input: {
             claudeCodeUserId: config.userId,
-            claudeCodeUserName: config.organization,
+            claudeCodeUserName: config.userName,
+            claudeCodeTeamName: config.team,
             sessions: sessions.map((s) => ({
                 sessionId: s.sessionId,
                 projectPath: s.projectIdentifier || s.projectPath,

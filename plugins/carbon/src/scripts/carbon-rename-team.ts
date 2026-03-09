@@ -1,10 +1,10 @@
 /**
- * Carbon Rename User Script
+ * Carbon Rename Team Script
  *
- * Updates the organization name for anonymous carbon tracking.
+ * Updates the team name for anonymous carbon tracking.
  *
  * Usage:
- *   carbon-rename-user.ts --name "New Organization"
+ *   carbon-rename-team.ts --name "New Team"
  */
 
 import '../utils/load-env';
@@ -17,13 +17,13 @@ function main(): void {
     const newName = getArgValue('--name');
 
     if (newName === null) {
-        console.log('Error: provide --name "Organization Name"');
+        console.log('Error: provide --name "Team Name"');
         process.exit(1);
     }
 
     const error = validateName(newName, 100);
     if (error) {
-        console.error(`Organization: ${error}`);
+        console.error(`Team: ${error}`);
         process.exit(1);
     }
 
@@ -39,16 +39,16 @@ function main(): void {
             return;
         }
 
-        const oldOrg = getConfig(db, 'claude_code_organization') || '';
-        setConfig(db, 'claude_code_organization', newName);
+        const oldTeam = getConfig(db, 'claude_code_team') || '';
+        setConfig(db, 'claude_code_team', newName);
 
-        if (oldOrg) {
-            console.log(`Updated organization from "${oldOrg}" to "${newName}".`);
+        if (oldTeam) {
+            console.log(`Updated team from "${oldTeam}" to "${newName}".`);
         } else {
-            console.log(`Organization set to "${newName}".`);
+            console.log(`Team set to "${newName}".`);
         }
     } catch (error) {
-        logError('Failed to update organization', error);
+        logError('Failed to update team', error);
     } finally {
         db.close();
     }

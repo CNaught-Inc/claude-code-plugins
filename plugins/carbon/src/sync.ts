@@ -20,11 +20,12 @@ import {
     openDatabase,
     setConfig
 } from './data-store';
+import { generateUserName } from './utils/name-generator';
 import { log, logError } from './utils/stdin';
 
 /**
  * Read sync configuration from the database.
- * Returns null if sync is not enabled, config is incomplete, or organization is empty.
+ * Returns null if sync is not enabled, config is incomplete, or team is empty.
  */
 export function getSyncConfig(db: Database): SyncConfig | null {
     const enabled = getConfig(db, 'sync_enabled');
@@ -33,12 +34,28 @@ export function getSyncConfig(db: Database): SyncConfig | null {
     const userId = getConfig(db, 'claude_code_user_id');
     if (!userId) return null;
 
-    // Organization is required for sync. Existing users who had sync_enabled=true
-    // but never set an organization will stop syncing until they re-run /carbon:setup.
-    const organization = getConfig(db, 'claude_code_organization') ?? '';
-    if (!organization) return null;
+    // Team is required for sync. Existing users who had sync_enabled=true
+    // but never set a team will stop syncing until they re-run /carbon:setup.
+    const team = getConfig(db, 'claude_code_team') ?? '';
+    if (!team) return null;
 
-    return { userId, organization };
+    // userName is required for sync — ensureUserName() should be called
+    // before getSyncConfig() in sync paths to populate this for upgrade users.
+    const userName = getConfig(db, 'claude_code_user_name') ?? '';
+    if (!userName) return null;
+
+    return { userId, userName, team };
+}
+
+/**
+ * Ensure a user display name exists in the database.
+ * Generates one if missing (upgrade path for users who set up before user names were added).
+ */
+export function ensureUserName(db: Database): void {
+    const existing = getConfig(db, 'claude_code_user_name');
+    if (!existing) {
+        setConfig(db, 'claude_code_user_name', generateUserName());
+    }
 }
 
 /**
@@ -54,6 +71,7 @@ function storeTeamId(db: Database, teamId: string | null): void {
  * Sync a single session to the API. Sets sync_status to synced/failed.
  */
 export async function syncSession(db: Database, sessionId: string): Promise<void> {
+    ensureUserName(db);
     const config = getSyncConfig(db);
     if (!config) return;
 
@@ -74,6 +92,7 @@ export async function syncSession(db: Database, sessionId: string): Promise<void
  * Returns the total number of sessions synced.
  */
 export async function syncUnsyncedSessions(db: Database): Promise<number> {
+    ensureUserName(db);
     const config = getSyncConfig(db);
     if (!config) return 0;
 

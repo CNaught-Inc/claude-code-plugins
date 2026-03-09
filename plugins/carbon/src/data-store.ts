@@ -255,6 +255,15 @@ export const MIGRATIONS: Migration[] = [
             // Remove project_name entries from project_config (no longer used)
             db.run("DELETE FROM project_config WHERE key = 'project_name'");
         }
+    },
+    {
+        version: 7,
+        description: 'Rename organization to team in plugin_config',
+        up: (db) => {
+            db.run(
+                "UPDATE plugin_config SET key = 'claude_code_team' WHERE key = 'claude_code_organization'"
+            );
+        }
     }
 ];
 
