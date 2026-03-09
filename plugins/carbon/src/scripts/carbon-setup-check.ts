@@ -25,7 +25,7 @@ interface SetupCheckResult {
     isSetup: boolean;
     installedAt?: string;
     syncEnabled?: boolean;
-    organization?: string;
+    team?: string;
     userId?: string;
     projectId?: string;
     statusLineConfigured?: boolean;
@@ -58,14 +58,14 @@ function main(): void {
 
         const projectId = resolveProjectIdentifier(process.cwd());
         const syncEnabled = getConfig(db, 'sync_enabled') === 'true';
-        const organization = getConfig(db, 'claude_code_organization');
+        const team = getConfig(db, 'claude_code_team');
         const userId = getConfig(db, 'claude_code_user_id');
 
         return {
             isSetup: true,
             installedAt: installedAt.toISOString(),
             syncEnabled,
-            organization: organization ?? undefined,
+            team: team ?? undefined,
             userId: userId ?? undefined,
             projectId,
             statusLineConfigured: checkStatusLine()

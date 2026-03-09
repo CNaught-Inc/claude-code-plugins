@@ -21,7 +21,7 @@ function getSessionStatsFromDb(sessionId: string): { co2Grams: number; energyWh:
     });
 }
 
-function getSyncInfo(): { enabled: boolean; organization: string | null; userId: string | null } {
+function getSyncInfo(): { enabled: boolean; team: string | null; userId: string | null } {
     return (
         queryReadonlyDb((db) => {
             const get = (key: string) => {
@@ -33,10 +33,10 @@ function getSyncInfo(): { enabled: boolean; organization: string | null; userId:
             const enabled = get('sync_enabled') === 'true';
             return {
                 enabled,
-                organization: enabled ? get('claude_code_organization') : null,
+                team: enabled ? get('claude_code_team') : null,
                 userId: enabled ? get('claude_code_user_id') : null
             };
-        }) ?? { enabled: false, organization: null, userId: null }
+        }) ?? { enabled: false, team: null, userId: null }
     );
 }
 

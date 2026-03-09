@@ -36,6 +36,7 @@ import {
 import { syncUnsyncedSessions } from '../sync';
 import { getArgValue, hasFlag, validateName } from '../utils/args';
 import { generateMachineUserId } from '../utils/machine-id';
+import { generateUserName } from '../utils/name-generator';
 import { logError } from '../utils/stdin';
 import { configureSettings, convertToUserScope } from './setup-helpers';
 
@@ -84,10 +85,7 @@ function backfillSessions(db: import('bun:sqlite').Database): number {
  * Configure anonymous usage tracking with the CNaught API.
  * Generates a random user ID on first enable.
  */
-async function configureSyncTracking(
-    shouldBackfill: boolean,
-    organization: string | null
-): Promise<void> {
+async function configureSyncTracking(shouldBackfill: boolean): Promise<void> {
     const db = openDatabase();
     try {
         initializeDatabase(db);
@@ -95,30 +93,16 @@ async function configureSyncTracking(
         // Check if sync was already configured
         const existingUserId = getConfig(db, 'claude_code_user_id');
         if (existingUserId) {
-            const existingOrg = getConfig(db, 'claude_code_organization') || '';
-            // Update organization if a new one was provided
-            if (organization) {
-                setConfig(db, 'claude_code_organization', organization);
-                console.log(
-                    `  Updated organization to "${organization}" (id: ${existingUserId.slice(0, 8)}...)`
-                );
-            } else {
-                const orgDisplay = existingOrg ? `"${existingOrg}"` : 'no organization';
-                console.log(
-                    `  Already configured with ${orgDisplay} (id: ${existingUserId.slice(0, 8)}...)`
-                );
-            }
+            console.log(`  Already configured (id: ${existingUserId.slice(0, 8)}...)`);
             setConfig(db, 'sync_enabled', 'true');
         } else {
             const userId = generateMachineUserId();
+            const userName = generateUserName();
 
             setConfig(db, 'sync_enabled', 'true');
             setConfig(db, 'claude_code_user_id', userId);
-            if (organization) {
-                setConfig(db, 'claude_code_organization', organization);
-            }
-            const orgDisplay = organization ? ` for "${organization}"` : '';
-            console.log(`  Sync enabled${orgDisplay} (id: ${userId.slice(0, 8)}...)`);
+            setConfig(db, 'claude_code_user_name', userName);
+            console.log(`  Sync enabled as "${userName}"`);
         }
 
         const isFirstEnable = !existingUserId;
@@ -145,26 +129,23 @@ async function configureSyncTracking(
 async function main(): Promise<void> {
     const shouldBackfill = hasFlag('--backfill');
     const shouldEnableSync = !hasFlag('--disable-sync');
-    const organization = getArgValue('--organization');
+    const team = getArgValue('--team');
 
-    // Validate organization if provided
-    if (organization !== null) {
-        const error = validateName(organization, 100);
+    // Validate team if provided
+    if (team !== null) {
+        const error = validateName(team, 100);
         if (error) {
-            console.error(`Organization: ${error}`);
+            console.error(`Team: ${error}`);
             process.exit(1);
         }
     }
 
-    // Organization is required when sync is enabled
-    if (shouldEnableSync && !organization) {
-        // Check if there's already an organization configured
-        const existingOrg = withDatabase((db) => getConfig(db, 'claude_code_organization'));
-        if (!existingOrg) {
+    // Team is always required (unless already configured)
+    if (!team) {
+        const existingTeam = withDatabase((db) => getConfig(db, 'claude_code_team'));
+        if (!existingTeam) {
             console.error(
-                'Error: --organization is required when sync is enabled.\n' +
-                    'Use --organization "Your Org" to set your organization name,\n' +
-                    'or use --disable-sync to skip anonymous tracking.'
+                'Error: --team is required.\n' + 'Use --team "Your Team" to set your team name.'
             );
             process.exit(1);
         }
@@ -181,6 +162,11 @@ async function main(): Promise<void> {
         withDatabase((db) => {
             const isFirstInstall = getInstalledAt(db) === null;
             setInstalledAt(db);
+
+            // Store team name if provided
+            if (team) {
+                setConfig(db, 'claude_code_team', team);
+            }
 
             console.log('  Database initialized successfully');
             if (isFirstInstall && !shouldBackfill) {
@@ -242,7 +228,7 @@ async function main(): Promise<void> {
         // Step 3: Anonymous usage tracking
         if (shouldEnableSync) {
             console.log('Step 3: Anonymous usage tracking...');
-            await configureSyncTracking(shouldBackfill, organization);
+            await configureSyncTracking(shouldBackfill);
             console.log('');
         }
 

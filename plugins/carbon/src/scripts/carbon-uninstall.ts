@@ -69,7 +69,8 @@ function main(): void {
         initializeDatabase(cleanupDb);
         deleteConfig(cleanupDb, 'sync_enabled');
         deleteConfig(cleanupDb, 'claude_code_user_id');
-        deleteConfig(cleanupDb, 'claude_code_organization');
+        deleteConfig(cleanupDb, 'claude_code_user_name');
+        deleteConfig(cleanupDb, 'claude_code_team');
         cleanupDb.close();
     } catch {
         // Non-critical, database is about to be deleted anyway

@@ -539,7 +539,8 @@ describe('migrations', () => {
 
         initializeDatabase(db);
 
-        expect(getConfig(db, 'claude_code_organization')).toBe('My Org');
+        // v6 renames to organization, then v7 renames to team
+        expect(getConfig(db, 'claude_code_team')).toBe('My Org');
         expect(getConfig(db, 'claude_code_user_name')).toBeNull();
         db.close();
     });
@@ -826,7 +827,7 @@ describe('configureSyncTracking sync_status behavior', () => {
         // Simulate first-time sync enable without backfill
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'test-user-id');
-        setConfig(db, 'claude_code_organization', 'Test Org');
+        setConfig(db, 'claude_code_team', 'Test Org');
         db.run("UPDATE sessions SET sync_status = 'synced' WHERE sync_status != 'synced'");
 
         // Existing sessions should no longer need sync
@@ -845,7 +846,7 @@ describe('configureSyncTracking sync_status behavior', () => {
         // Simulate already-configured sync
         setConfig(db, 'sync_enabled', 'true');
         setConfig(db, 'claude_code_user_id', 'existing-user-id');
-        setConfig(db, 'claude_code_organization', 'Existing Org');
+        setConfig(db, 'claude_code_team', 'Existing Org');
 
         // Add sessions that haven't synced yet
         upsertSession(db, makeSession({ sessionId: 's1' }));

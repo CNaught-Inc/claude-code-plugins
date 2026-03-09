@@ -179,9 +179,7 @@ async function main(): Promise<void> {
                     oldestSessionDate: getOldestSessionDate(db),
                     syncInfo: {
                         enabled: syncEnabled,
-                        organization: syncEnabled
-                            ? getConfig(db, 'claude_code_organization')
-                            : null,
+                        team: syncEnabled ? getConfig(db, 'claude_code_team') : null,
                         userId: syncEnabled ? getConfig(db, 'claude_code_user_id') : null,
                         teamId: syncEnabled ? getConfig(db, 'claude_code_team_id') : null,
                         pendingCount: syncEnabled ? getUnsyncedSessions(db, 1000).length : 0
@@ -339,8 +337,8 @@ async function main(): Promise<void> {
             console.log(`${c.bold}  Sync${c.reset}`);
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
-            if (syncInfo.organization) {
-                console.log(`    ${c.dim}Organization:${c.reset}  ${syncInfo.organization}`);
+            if (syncInfo.team) {
+                console.log(`    ${c.dim}Team:${c.reset}          ${syncInfo.team}`);
             }
             if (syncInfo.teamId) {
                 console.log(
