@@ -407,6 +407,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's1',
+                projectPath: '/test/project-a',
                 projectIdentifier: 'aaaa1111',
                 totalTokens: 1000,
                 energyWh: 0.05,
@@ -419,6 +420,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's2',
+                projectPath: '/test/project-b',
                 projectIdentifier: 'bbbb2222',
                 totalTokens: 2000,
                 energyWh: 0.1,
@@ -431,6 +433,7 @@ describe('getProjectStats', () => {
             db,
             makeSession({
                 sessionId: 's3',
+                projectPath: '/test/project-b',
                 projectIdentifier: 'bbbb2222',
                 totalTokens: 3000,
                 energyWh: 0.15,
@@ -444,12 +447,12 @@ describe('getProjectStats', () => {
         expect(stats).toHaveLength(2);
 
         // Sorted by CO2 desc, so project-b first
-        expect(stats[0].projectPath).toBe('bbbb2222');
+        expect(stats[0].projectPath).toBe('/test/project-b');
         expect(stats[0].sessions).toBe(2);
         expect(stats[0].tokens).toBe(5000);
         expect(stats[0].co2Grams).toBeCloseTo(0.075);
 
-        expect(stats[1].projectPath).toBe('aaaa1111');
+        expect(stats[1].projectPath).toBe('/test/project-a');
         expect(stats[1].sessions).toBe(1);
         expect(stats[1].tokens).toBe(1000);
 

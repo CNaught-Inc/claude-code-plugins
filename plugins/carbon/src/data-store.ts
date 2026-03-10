@@ -463,21 +463,21 @@ export function getProjectStats(db: Database, days?: number): ProjectStats[] {
     const whereClause = days != null ? `WHERE created_at >= DATE('now', '-' || ? || ' days')` : '';
     const stmt = db.prepare(`
         SELECT
-            project_identifier,
+            project_path,
             COUNT(*) as sessions,
             SUM(total_tokens) as tokens,
             SUM(energy_wh) as energy_wh,
             SUM(co2_grams) as co2_grams
         FROM sessions
         ${whereClause}
-        GROUP BY project_identifier
+        GROUP BY project_path
         ORDER BY co2_grams DESC
     `);
 
     const rows = (days != null ? stmt.all(days) : stmt.all()) as Record<string, unknown>[];
 
     return rows.map((row) => ({
-        projectPath: row.project_identifier as string,
+        projectPath: row.project_path as string,
         sessions: Number(row.sessions),
         tokens: Number(row.tokens),
         energyWh: Number(row.energy_wh),
