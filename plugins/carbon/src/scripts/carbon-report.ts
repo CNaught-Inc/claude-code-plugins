@@ -7,6 +7,7 @@
 import '../utils/load-env';
 
 import type { Database } from 'bun:sqlite';
+import * as path from 'node:path';
 
 import { getDashboardUrl } from '../api-client';
 import { getModelConfig, MILES_PER_KG_CO2 } from '../carbon-calculator';
@@ -307,13 +308,13 @@ async function main(): Promise<void> {
             const otherLabel =
                 otherCount > 0 ? `+ ${otherCount} other${otherCount === 1 ? '' : 's'}` : '';
             const maxNameLen = Math.max(
-                ...displayedProjects.map((p) => p.projectPath.length),
+                ...displayedProjects.map((p) => path.basename(p.projectPath).length),
                 otherLabel.length
             );
             for (let i = 0; i < displayedProjects.length; i++) {
                 const p = displayedProjects[i];
                 const color = projectColors[i % projectColors.length];
-                const name = p.projectPath.padEnd(maxNameLen);
+                const name = path.basename(p.projectPath).padEnd(maxNameLen);
                 const bar = progressBar(p.co2Grams, totalProjectCO2, 15, color);
                 const co2 = `${projectKgs[i].toFixed(2)}kg`.padStart(8);
                 console.log(
