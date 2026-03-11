@@ -1,0 +1,11 @@
+{
+  "name": "roslyn-ls",
+  "description": "Roslyn language server",
+  "version": "1.0.0",
+  "author": {
+    "name": "CNaught"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/CNaught-Inc/claude-code-plugins",
+  "homepage": "https://github.com/CNaught-Inc/claude-code-plugins"
+}

@@ -1,0 +1,21 @@
+{
+  "csharp": 
+  {
+    "command": "roslyn-language-server",
+    "args": [
+        "--stdio",
+        "--autoLoadProjects",
+        "--logLevel",
+        "Information"
+    ],
+    "transport": "stdio",
+    "extensionToLanguage": {
+      ".cs": "csharp",
+      ".csx": "csharp",
+      ".cshtml": "csharp"
+    },
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout" : 120000
+  }
+}

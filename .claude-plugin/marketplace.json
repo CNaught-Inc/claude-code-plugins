@@ -10,6 +10,17 @@
       "name": "carbon",
       "description": "Track and offset carbon emissions from your Claude Code usage",
       "source": "./plugins/carbon"
+    },
+    {
+      "name": "roslyn-ls",
+      "version": "1.0.0",
+      "source": "./plugins/roslyn-ls",
+      "description": "Roslyn language server",
+      "category": "development",
+      "tags": ["csharp", "dotnet", "lsp", "roslyn"],
+      "author": {
+        "name": "CNaught"
+      }
     }
   ]
 }
