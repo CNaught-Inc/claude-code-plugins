@@ -34,7 +34,7 @@ Ask the user whether they want to:
 
 ### Step 2: Ask for team name
 
-Ask the user for their team name (free text, **required**). This is used to group users into teams and identify their sessions. They cannot skip this.
+Ask the user for their team name (free text, **required**). Tell them that this should usually be something like their company or organization name. This is used to group users into teams and identify their sessions. They cannot skip this. DO NOT use the AskUserQuestion tool here since they have to provide an input.
 
 ### Step 3: Ask about anonymous tracking
 
@@ -78,4 +78,4 @@ Show the output to the user and confirm that the database is initialized, the st
 - The statusline shows real-time CO₂ estimates in the Claude Code status bar across all projects
 - Sessions are tracked automatically via hooks — no manual action needed
 - If sync is enabled, data syncs in the background after each response (non-blocking)
-- Always use the `AskUserQuestion` tool when asking the user a question
+- Always use the `AskUserQuestion` tool when asking the user a question that has multiple choices.
