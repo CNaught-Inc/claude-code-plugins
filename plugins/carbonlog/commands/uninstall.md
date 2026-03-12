@@ -40,4 +40,4 @@ Let the user know the uninstall is complete and that they can re-install at any 
 
 ## Notes
 
-- Always use the `AskUserQuestion` tool when asking the user a question
+- Always use the `AskUserQuestion` tool when asking the user a question with multiple choices.
