@@ -8,7 +8,7 @@
     "plugins": [
         {
             "name": "carbonlog",
-            "description": "Track and offset carbon emissions from your Claude Code usage with Carbonlog",
+            "description": "Track and offset carbon emissions from your Claude Code usage. Includes eco-review (sustainability audit) and eco-design (green architecture checklist) skills.",
             "source": "./plugins/carbonlog"
         }
     ]

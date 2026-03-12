@@ -18,4 +18,4 @@ Show the output to the user.
 
 ## Notes
 
-- Always use the `AskUserQuestion` tool when asking the user a question
+- Always use the `AskUserQuestion` tool when asking the user a question with multiple choices.
