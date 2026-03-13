@@ -108,14 +108,20 @@ The plugin uses Claude Code [hooks](https://docs.anthropic.com/en/docs/claude-co
 
 ### Carbon Calculation
 
-Calculations use the [Jegham et al.](https://arxiv.org/abs/2505.09598) methodology ("How Hungry is AI?"):
+Calculations are based on the [Jegham et al.](https://arxiv.org/abs/2505.09598) methodology ("How Hungry is AI?"), a peer-reviewed, infrastructure-aware framework validated against provider disclosures. This implements a simplified version of their physics-based model:
 
 ```
 Energy (Wh)  = (TTFT + outputTokens / TPS) × (GPU_power × util + nonGPU_power × util) × PUE
 CO₂ (g)      = Energy (Wh) × CIF
 ```
 
-Per-model configs (Haiku, Sonnet, Opus) capture GPU power draw, utilization bounds, datacenter PUE, and carbon intensity factor. Each API request incurs its own TTFT cost for accurate per-request accounting.
+Per-model configs (Haiku, Sonnet, Opus) capture GPU power draw, utilization bounds, datacenter PUE, and carbon intensity factor. Each API request incurs its own TTFT cost for accurate per-request accounting. All results are rounded to whole numbers to reflect the inherent uncertainty in the underlying estimates.
+
+**What these estimates cover**: Operational energy consumption from Claude inference on Anthropic's datacenter infrastructure. They do not include emissions from training Claude models, hardware manufacturing, or your local machine — these are either Anthropic's responsibility to report or not attributable on a per-query basis.
+
+**Accuracy and limitations**: Results are reasonable order-of-magnitude estimates, not precise measurements. Key inputs like datacenter batch size and GPU utilization are not observable from outside Anthropic, introducing inherent uncertainty. Additionally, energy for processing large input contexts (>10,000 tokens) may be somewhat underestimated. Results should be interpreted accordingly.
+
+You can find a more detailed discussion in our [methodology](methodology.md).
 
 ### Project Identification
 

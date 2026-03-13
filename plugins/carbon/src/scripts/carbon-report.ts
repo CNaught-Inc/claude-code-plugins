@@ -338,14 +338,16 @@ async function main(): Promise<void> {
             console.log(`${c.bold}  Sync${c.reset}`);
             console.log(`${c.gray}  ──────────────────────────────────────────────────${c.reset}`);
             console.log('');
-            if (syncInfo.team) {
-                console.log(`    ${c.dim}Team:${c.reset}          ${syncInfo.team}`);
-            }
             if (syncInfo.teamId) {
                 console.log(
                     `    ${c.dim}Dashboard:${c.reset}     ${getDashboardUrl(syncInfo.teamId)}`
                 );
             }
+            console.log('');
+            if (syncInfo.team) {
+                console.log(`    ${c.dim}Team:          ${syncInfo.team}${c.reset}`);
+            }
+            console.log(`    ${c.dim}Database:      ${getDatabasePath()}${c.reset}`);
             if (syncInfo.pendingCount > 0) {
                 console.log(
                     `    ${c.dim}Pending sync:${c.reset}  ${syncInfo.pendingCount} session(s)`
@@ -355,7 +357,10 @@ async function main(): Promise<void> {
         }
 
         // ── Footer ────────────────────────────────────────────
-        console.log(`${c.gray}  DB: ${getDatabasePath()}${c.reset}`);
+        console.log(
+            `${c.dim}  Methodology: https://github.com/CNaught-Inc/claude-code-plugins/blob/main/plugins/carbon/methodology.md${c.reset}`
+        );
+        console.log(`  Questions or feedback? Email feedback@cnaught.com`);
         console.log('');
     } catch (error) {
         logError('Failed to generate report', error);

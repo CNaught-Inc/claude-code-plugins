@@ -1,0 +1,15 @@
+# How Jegham et al. Calculate AI GHG Emissions
+
+Jegham et al. (2025) built an infrastructure-aware, physics-based model for estimating LLM inference energy. They calculate energy use from total inference time — measured via real latency benchmarks from Artificial Analysis — multiplied by system power draw at GPU utilization bounds, adjusted for datacenter Power Usage Effectiveness (PUE). Because inference time is derived from actual API latency, it naturally captures both the input token prefill phase and the output generation phase. They run 10,000 Monte Carlo draws per model to produce an estimate with uncertainty, and apply provider-specific carbon intensity factors tied to specific datacenter regions rather than country-level averages. The methodology is validated against provider disclosures: their GPT-4o estimate came within 19% of a figure Sam Altman publicly stated, and their Mistral estimate aligned within one standard deviation of Mistral's own LCA report. Notably, Jegham excludes embodied emissions (hardware manufacturing) from their scope deliberately, to avoid attribution uncertainty across shared infrastructure.
+
+# How We Have Translated This Into Our Claude Code Plugin
+
+Our implementation translates the core of this into a per-request calculator. For each API call, inference time is estimated as TTFT plus output tokens divided by TPS, using fixed median benchmarks from Artificial Analysis for each model. System power is computed at Jegham's minimum and maximum GPU utilization bounds and averaged, incorporating non-GPU subsystem power and datacenter PUE. We have standardized all Anthropic models to use the same AWS infrastructure parameters (PUE 1.14, Carbon Intensity Factor [CIF] 0.30 kgCO₂e/kWh) and Large hardware class (8 GPUs, H100/H200). CO₂ is then derived by multiplying energy in watt-hours by the CIF. For multi-request sessions, each API call is calculated independently so every request incurs its own TTFT cost, with results summed and broken down by model family. Like Jegham, we exclude embodied emissions from scope.
+
+# Where We Differ From Jegham et al.
+
+Two aspects of Jegham's methodology are not currently implemented.
+
+First, input tokens are not directly accounted for. TTFT does capture some signal for input processing time — it is a real latency measurement that includes prefill — but because we use a fixed median TTFT per model rather than one that scales with actual input length, that sensitivity is lost. In practice this can meaningfully underestimate energy for long-context requests where prefill time dominates, such as debugging code or connecting Claude Code to a large repository.
+
+Second, we produce point estimates rather than uncertainty ranges. Jegham's Monte Carlo sampling exists precisely because key inputs — batch size and GPU utilization — are not directly observable from outside the provider. It should be noted that reporting a single number implies more confidence in the estimate than the methodology supports.
