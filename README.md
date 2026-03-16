@@ -4,11 +4,11 @@ A monorepo of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plug
 
 ## Plugins
 
-### [Carbon Tracker](plugins/carbon/)
+### [Carbonlog](plugins/carbonlog/)
 
 Track carbon emissions from your Claude Code usage. See real-time CO2 estimates in your status bar, generate reports with relatable equivalents, and optionally sync anonymized metrics to CNaught.
 
-See the [Carbon Tracker README](plugins/carbon/README.md) for installation, setup, commands, statusline, and more.
+See the [Carbonlog README](plugins/carbonlog/README.md) for installation, setup, commands, statusline, and more.
 
 ## Development
 
@@ -36,7 +36,7 @@ bun run lint        # Lint all plugins
 ```
 .claude-plugin/     # Plugin marketplace metadata
 plugins/
-  carbon/           # Carbon tracker plugin
+  carbonlog/        # Carbonlog plugin
     src/            # Source code (run directly by Bun)
 ```
 
