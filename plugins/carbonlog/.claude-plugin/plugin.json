@@ -1,0 +1,8 @@
+{
+    "name": "carbonlog",
+    "version": "2.7.2",
+    "description": "Track and offset carbon emissions from your Claude Code usage",
+    "author": {
+        "name": "CNaught"
+    }
+}
