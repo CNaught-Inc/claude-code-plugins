@@ -17,10 +17,10 @@ export const LEGACY_PLUGIN_ID = 'carbon@cnaught-plugins';
  */
 export function isPluginStatusLine(command: string): boolean {
     return (
-        command.includes('statusline-carbon') ||
-        command.includes('carbon-statusline') ||
         command.includes('carbonlog-statusline') ||
-        command.includes('statusline-wrapper')
+        command.includes('statusline-wrapper') ||
+        command.includes('carbon-statusline') ||
+        command.includes('statusline-carbon')
     );
 }
 
