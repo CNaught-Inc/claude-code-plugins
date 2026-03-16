@@ -1,0 +1,155 @@
+/**
+ * Carbonlog statusline output logic.
+ *
+ * Shared between the standalone carbonlog-statusline entry point
+ * and the statusline-wrapper entry point.
+ */
+
+import { calculateCarbonFromTokens } from '../carbonlog-calculator';
+import { queryReadonlyDb } from '../data-store';
+import type { StatuslineInput } from '../utils/stdin';
+
+function getSessionStatsFromDb(sessionId: string): { co2Grams: number; energyWh: number } | null {
+    return queryReadonlyDb((db) => {
+        const row = db
+            .prepare(
+                'SELECT COALESCE(co2_grams, 0) as co2, COALESCE(energy_wh, 0) as energy FROM sessions WHERE session_id = ?'
+            )
+            .get(sessionId) as { co2: number; energy: number } | undefined;
+        if (!row) return null;
+        return { co2Grams: row.co2, energyWh: row.energy };
+    });
+}
+
+function getSyncInfo(): { enabled: boolean; team: string | null; userId: string | null } {
+    return (
+        queryReadonlyDb((db) => {
+            const get = (key: string) => {
+                const row = db.prepare('SELECT value FROM plugin_config WHERE key = ?').get(key) as
+                    | { value: string }
+                    | undefined;
+                return row?.value ?? null;
+            };
+            const enabled = get('sync_enabled') === 'true';
+            return {
+                enabled,
+                team: enabled ? get('claude_code_team') : null,
+                userId: enabled ? get('claude_code_user_id') : null
+            };
+        }) ?? { enabled: false, team: null, userId: null }
+    );
+}
+
+type SyncStatus = 'pending' | 'dirty' | 'synced' | 'failed';
+
+function getSessionSyncStatus(sessionId: string): SyncStatus | null {
+    return queryReadonlyDb((db) => {
+        const row = db
+            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
+            .get(sessionId) as { sync_status: SyncStatus } | undefined;
+        if (row === undefined) return null;
+        return row.sync_status;
+    });
+}
+
+function getTotalCO2FromDb(projectIdentifier?: string): number | null {
+    return queryReadonlyDb((db) => {
+        let row: { total: number };
+        if (projectIdentifier) {
+            row = db
+                .prepare(
+                    'SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions WHERE project_identifier = ?'
+                )
+                .get(projectIdentifier) as { total: number };
+        } else {
+            row = db.prepare('SELECT COALESCE(SUM(co2_grams), 0) as total FROM sessions').get() as {
+                total: number;
+            };
+        }
+        return row.total;
+    });
+}
+
+function getTotalEnergyFromDb(projectIdentifier?: string): number | null {
+    return queryReadonlyDb((db) => {
+        let row: { total: number };
+        if (projectIdentifier) {
+            row = db
+                .prepare(
+                    'SELECT COALESCE(SUM(energy_wh), 0) as total FROM sessions WHERE project_identifier = ?'
+                )
+                .get(projectIdentifier) as { total: number };
+        } else {
+            row = db.prepare('SELECT COALESCE(SUM(energy_wh), 0) as total FROM sessions').get() as {
+                total: number;
+            };
+        }
+        return row.total;
+    });
+}
+
+/**
+ * Get the carbon statusline output string from parsed input.
+ * Returns the formatted string, or empty string if nothing to display.
+ */
+export function getCarbonlogOutput(input: StatuslineInput): string {
+    const usage = input.context_window?.current_usage || {};
+
+    // Session CO2: prefer the authoritative DB value (cumulative, per-request TTFT).
+    // Fall back to a live estimate from context window tokens before the first stop hook.
+    const dbSessionStats = input.session_id ? getSessionStatsFromDb(input.session_id) : null;
+    let sessionCO2: number;
+    let sessionEnergyWh: number;
+
+    if (dbSessionStats !== null && dbSessionStats.co2Grams > 0) {
+        sessionCO2 = dbSessionStats.co2Grams;
+        sessionEnergyWh = dbSessionStats.energyWh;
+    } else {
+        // No DB record yet — estimate from current context window tokens
+        const outputTokens = usage.output_tokens ?? 0;
+        if (outputTokens > 0) {
+            const result = calculateCarbonFromTokens(outputTokens, input.model?.id ?? 'unknown');
+            sessionCO2 = result.co2Grams;
+            sessionEnergyWh = result.energy.energyWh;
+        } else {
+            sessionCO2 = 0;
+            sessionEnergyWh = 0;
+        }
+    }
+
+    const totalCO2 = getTotalCO2FromDb() ?? 0;
+    const totalEnergyWh = getTotalEnergyFromDb() ?? 0;
+
+    if (sessionCO2 === 0 && totalCO2 === 0) {
+        return '';
+    }
+
+    const reset = '\x1b[0m';
+
+    // Build metrics — project totals only
+    const rawKg = totalCO2 > 0 ? totalCO2 / 1000 : sessionCO2 / 1000;
+    const totalKg = rawKg > 0 && rawKg < 0.01 ? '<0.01' : rawKg.toFixed(2);
+    const co2Str = `CO\u2082 ${totalKg}kg`;
+
+    const effectiveEnergyWh = totalEnergyWh > 0 ? totalEnergyWh : sessionEnergyWh;
+    const rawKwh = effectiveEnergyWh / 1000;
+    const totalKwh = rawKwh > 0 && rawKwh < 0.01 ? '<0.01' : rawKwh.toFixed(2);
+    const energyStr = `Energy ${totalKwh}kWh`;
+
+    let syncSuffix = '';
+    const syncInfo = getSyncInfo();
+    if (syncInfo.enabled && syncInfo.userId) {
+        const syncStatus = input.session_id ? getSessionSyncStatus(input.session_id) : null;
+        const green = '\x1b[38;2;50;205;50m'; // Lime green #32CD32
+        const red = '\x1b[38;2;208;83;63m'; // Brand orange #D0533F
+        // ⇄ text-based sync arrows respond to ANSI coloring
+        if (syncStatus === 'synced' || syncStatus === 'dirty') {
+            syncSuffix = ` ${green}\u21C4${reset}`;
+        } else if (syncStatus === 'failed') {
+            syncSuffix = ` ${red}\u21C4${reset}`;
+        }
+        // pending → no icon (never synced yet)
+    }
+
+    return `Climate Impact: ${co2Str} \u00b7 ${energyStr}${syncSuffix}`;
+}
