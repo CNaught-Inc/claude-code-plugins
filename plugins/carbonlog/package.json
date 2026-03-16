@@ -1,21 +1,21 @@
 {
-    "name": "@cnaught-inc/claude-code-carbonlog",
-    "version": "2.7.2",
-    "private": true,
-    "description": "Claude Code plugin for tracking carbon emissions from AI usage",
-    "scripts": {
-        "typecheck": "tsc --noEmit",
-        "test": "bun test"
-    },
-    "dependencies": {
-        "unique-names-generator": "^4.7.1",
-        "zod": "^3.25.76"
-    },
-    "devDependencies": {
-        "@types/better-sqlite3": "^7.6.12",
-        "@types/bun": "latest",
-        "@types/node": "^20.17.9",
-        "better-sqlite3": "^11.0.0",
-        "typescript": "5.9.3"
-    }
+  "name": "@cnaught-inc/claude-code-carbonlog",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Claude Code plugin for tracking carbon emissions from AI usage",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "unique-names-generator": "^4.7.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/bun": "latest",
+    "@types/node": "^20.17.9",
+    "better-sqlite3": "^11.0.0",
+    "typescript": "5.9.3"
+  }
 }
