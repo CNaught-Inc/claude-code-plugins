@@ -1,0 +1,43 @@
+# /carbonlog:uninstall
+
+Uninstall the CNaught Carbonlog plugin.
+
+## Instructions
+
+### Step 1: Confirm with the user
+
+Use the `AskUserQuestion` tool to confirm: "This will remove all carbon tracking data and the plugin configuration. Continue?"
+
+- If **no**: Stop here.
+- If **yes**: Continue.
+
+### Step 2: Run the uninstall script
+
+```bash
+npx -y bun ${CLAUDE_PLUGIN_ROOT}/src/scripts/carbonlog-uninstall.ts
+```
+
+This removes all sessions and deletes the database.
+
+### Step 3: Clean up settings
+
+Read `~/.claude/plugins/installed_plugins.json` to find all `carbonlog@cnaught-plugins` entries and their `projectPath` values.
+
+For each entry that has a `projectPath`:
+1. In `<projectPath>/.claude/settings.local.json`:
+   - If there is a `_carbonlogOriginalStatusLine` key, restore it as the `statusLine` value and remove the `_carbonlogOriginalStatusLine` key.
+   - Otherwise, if the `statusLine` config's `command` contains `carbonlog-statusline` or `statusline-wrapper`, remove the `statusLine` key.
+   - Remove `"carbonlog@cnaught-plugins"` from the `enabledPlugins` object. If `enabledPlugins` is empty after removal, remove the key entirely.
+
+Then clean up global settings:
+1. In `~/.claude/settings.json`: apply the same statusLine cleanup logic (restore original or remove carbonlog statusline). Remove `"carbonlog@cnaught-plugins"` from `enabledPlugins`.
+2. In `~/.claude/settings.local.json`: remove `"carbonlog@cnaught-plugins"` from `enabledPlugins` if present.
+3. Remove all `carbonlog@cnaught-plugins` entries from `~/.claude/plugins/installed_plugins.json`.
+
+### Step 4: Confirm completion
+
+Let the user know the uninstall is complete and that they can re-install at any time by installing the plugin and running `/carbonlog:setup`.
+
+## Notes
+
+- Always use the `AskUserQuestion` tool when asking the user a question

@@ -12,8 +12,8 @@
       },
     },
     "plugins/carbon": {
-      "name": "@cnaught-inc/claude-code-carbon",
-      "version": "2.6.0",
+      "name": "@cnaught-inc/claude-code-carbonlog",
+      "version": "2.7.2",
       "dependencies": {
         "unique-names-generator": "^4.7.1",
         "zod": "^3.25.76",
@@ -46,7 +46,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.2", "", { "os": "win32", "cpu": "x64" }, "sha512-9ma7C4g8Sq3cBlRJD2yrsHXB1mnnEBdpy7PhvFrylQWQb4PoyCmPucdX7frvsSBQuFtIiKCrolPl/8tCZrKvgQ=="],
 
-    "@cnaught-inc/claude-code-carbon": ["@cnaught-inc/claude-code-carbon@workspace:plugins/carbon"],
+    "@cnaught-inc/claude-code-carbonlog": ["@cnaught-inc/claude-code-carbonlog@workspace:plugins/carbon"],
 
     "@types/better-sqlite3": ["@types/better-sqlite3@7.6.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA=="],
 
