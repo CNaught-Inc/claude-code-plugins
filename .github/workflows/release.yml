@@ -31,7 +31,7 @@ jobs:
           fi
 
           # Must be greater than current version
-          CURRENT=$(jq -r '.version' plugins/carbon/.claude-plugin/plugin.json)
+          CURRENT=$(jq -r '.version' plugins/carbonlog/.claude-plugin/plugin.json)
           if [ "$(printf '%s\n' "$CURRENT" "$VERSION" | sort -V | tail -1)" = "$CURRENT" ]; then
             echo "::error::Version $VERSION is not greater than current version $CURRENT"
             exit 1
