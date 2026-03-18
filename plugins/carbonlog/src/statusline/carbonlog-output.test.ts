@@ -20,12 +20,12 @@ beforeEach(() => {
 });
 
 describe('getCarbonlogOutput', () => {
-    it('returns empty string when no usage and no DB data', () => {
+    it('returns empty string when no DB data', () => {
         const result = getCarbonlogOutput({});
         expect(result).toBe('');
     });
 
-    it('returns empty string when tokens are zero and DB returns null', () => {
+    it('returns empty string when DB returns null', () => {
         const result = getCarbonlogOutput({
             context_window: {
                 current_usage: {
@@ -37,7 +37,7 @@ describe('getCarbonlogOutput', () => {
         expect(result).toBe('');
     });
 
-    it('shows climate impact from live tokens', () => {
+    it('returns empty string when only live tokens present but no DB data', () => {
         const result = getCarbonlogOutput({
             model: { id: 'claude-sonnet-4-20250514' },
             context_window: {
@@ -47,46 +47,32 @@ describe('getCarbonlogOutput', () => {
                 }
             }
         });
+        expect(result).toBe('');
+    });
+
+    it('shows climate impact from DB totals', () => {
+        // Call 1: getTotalCO2FromDb returns 5000g
+        // Call 2: getTotalEnergyFromDb returns 2000Wh
+        // Call 3: getSyncInfo returns null
+        mockQueryReadonlyDb
+            .mockReturnValueOnce(5000)
+            .mockReturnValueOnce(2000)
+            .mockReturnValueOnce(null);
+
+        const result = getCarbonlogOutput({
+            model: { id: 'claude-sonnet-4-20250514' }
+        });
 
         expect(result).toContain('Climate Impact:');
         expect(result).toContain('CO\u2082');
         expect(result).toContain('Energy');
     });
 
-    it('uses DB session stats without adding live estimate', () => {
-        // Call 1: getSessionStatsFromDb returns {co2: 1.5g, energy: 0.5Wh}
-        // Call 2: getTotalCO2FromDb returns null
-        // Call 3: getTotalEnergyFromDb returns null
-        // Call 4: getSyncInfo returns null
+    it('shows total CO2 when DB has data', () => {
+        // Call 1: getTotalCO2FromDb returns 10g
+        // Call 2: getTotalEnergyFromDb returns 5Wh
+        // Call 3: getSyncInfo returns null
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.5, energyWh: 0.5 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null);
-
-        const result = getCarbonlogOutput({
-            session_id: 'test-session',
-            model: { id: 'claude-sonnet-4-20250514' },
-            context_window: {
-                current_usage: {
-                    input_tokens: 1000,
-                    output_tokens: 500
-                }
-            }
-        });
-
-        expect(result).toContain('Climate Impact:');
-        expect(result).toContain('CO\u2082');
-        expect(result).toContain('kg');
-    });
-
-    it('shows total CO2 when DB has project data', () => {
-        // Call 1: getSessionStatsFromDb returns {co2: 0.5g, energy: 0.2Wh}
-        // Call 2: getTotalCO2FromDb returns 10g
-        // Call 3: getTotalEnergyFromDb returns 5
-        // Call 4: getSyncInfo returns null
-        mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 0.5, energyWh: 0.2 })
             .mockReturnValueOnce(10)
             .mockReturnValueOnce(5)
             .mockReturnValueOnce(null);
@@ -109,9 +95,8 @@ describe('getCarbonlogOutput', () => {
     });
 
     it('falls back to cwd when project_path is not set', () => {
-        // No session_id, so getSessionStatsFromDb is skipped.
         // Call 1: getTotalCO2FromDb returns 5g
-        // Call 2: getTotalEnergyFromDb returns 2
+        // Call 2: getTotalEnergyFromDb returns 2Wh
         // Call 3: getSyncInfo returns null
         mockQueryReadonlyDb.mockReturnValueOnce(5).mockReturnValueOnce(2).mockReturnValueOnce(null);
 
@@ -136,15 +121,13 @@ describe('getCarbonlogOutput', () => {
         expect(result).toBe('');
     });
 
-    it('shows CO2 from DB only when no live tokens', () => {
-        // Call 1: getSessionStatsFromDb returns {co2: 2g, energy: 0.8Wh}
-        // Call 2: getTotalCO2FromDb returns null
-        // Call 3: getTotalEnergyFromDb returns null
-        // Call 4: getSyncInfo returns null
+    it('shows CO2 from DB even when no live tokens', () => {
+        // Call 1: getTotalCO2FromDb returns 2000g
+        // Call 2: getTotalEnergyFromDb returns 800Wh
+        // Call 3: getSyncInfo returns null
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 2.0, energyWh: 0.8 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(2000)
+            .mockReturnValueOnce(800)
             .mockReturnValueOnce(null);
 
         const result = getCarbonlogOutput({
@@ -155,7 +138,7 @@ describe('getCarbonlogOutput', () => {
         expect(result).toContain('CO\u2082');
     });
 
-    it('handles cache tokens in calculation', () => {
+    it('returns empty string when context has cache tokens but no DB data', () => {
         const result = getCarbonlogOutput({
             model: { id: 'claude-sonnet-4-20250514' },
             context_window: {
@@ -168,18 +151,19 @@ describe('getCarbonlogOutput', () => {
             }
         });
 
-        // 6500 total tokens should produce non-zero CO2
-        expect(result).toContain('Climate Impact:');
-        expect(result).not.toBe('');
+        expect(result).toBe('');
     });
 });
 
 describe('getCarbonlogOutput sync display', () => {
     it('shows green arrows when sync_status is synced', () => {
+        // Call 1: getTotalCO2FromDb returns 1000g
+        // Call 2: getTotalEnergyFromDb returns 300Wh
+        // Call 3: getSyncInfo returns enabled
+        // Call 4: getSessionSyncStatus returns 'synced'
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(1000)
+            .mockReturnValueOnce(300)
             .mockReturnValueOnce({
                 enabled: true,
                 team: 'Curious Penguin',
@@ -195,9 +179,8 @@ describe('getCarbonlogOutput sync display', () => {
 
     it('shows green arrows when sync_status is dirty', () => {
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(1000)
+            .mockReturnValueOnce(300)
             .mockReturnValueOnce({
                 enabled: true,
                 team: 'Curious Penguin',
@@ -213,9 +196,8 @@ describe('getCarbonlogOutput sync display', () => {
 
     it('shows red arrows when sync_status is failed', () => {
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(1000)
+            .mockReturnValueOnce(300)
             .mockReturnValueOnce({
                 enabled: true,
                 team: 'Swift Falcon',
@@ -231,9 +213,8 @@ describe('getCarbonlogOutput sync display', () => {
 
     it('shows no arrows when sync_status is pending', () => {
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(1000)
+            .mockReturnValueOnce(300)
             .mockReturnValueOnce({
                 enabled: true,
                 team: 'Swift Falcon',
@@ -248,9 +229,8 @@ describe('getCarbonlogOutput sync display', () => {
 
     it('does not show sync info when sync is disabled', () => {
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(1000)
+            .mockReturnValueOnce(300)
             .mockReturnValueOnce({ enabled: false, team: null, userId: null });
 
         const result = getCarbonlogOutput({ session_id: 'test-session' });
@@ -259,9 +239,9 @@ describe('getCarbonlogOutput sync display', () => {
     });
 
     it('does not show sync arrows when no session_id', () => {
-        // No session_id, so getSessionStatsFromDb is skipped
+        // No session_id, so getSessionSyncStatus is never called
         // Call 1: getTotalCO2FromDb returns 5g
-        // Call 2: getTotalEnergyFromDb returns 2
+        // Call 2: getTotalEnergyFromDb returns 2Wh
         // Call 3: getSyncInfo returns enabled
         mockQueryReadonlyDb.mockReturnValueOnce(5).mockReturnValueOnce(2).mockReturnValueOnce({
             enabled: true,
@@ -286,9 +266,8 @@ describe('getCarbonlogOutput sync display', () => {
 
     it('shows sync arrows even when team is missing', () => {
         mockQueryReadonlyDb
-            .mockReturnValueOnce({ co2Grams: 1.0, energyWh: 0.3 })
-            .mockReturnValueOnce(null)
-            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(1000)
+            .mockReturnValueOnce(300)
             .mockReturnValueOnce({ enabled: true, team: null, userId: 'abcd1234' })
             .mockReturnValueOnce('synced');
 
