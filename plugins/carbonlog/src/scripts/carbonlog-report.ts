@@ -232,9 +232,7 @@ async function main(): Promise<void> {
                 ...(otherCO2 > 0 ? [otherCO2] : [])
             ];
             const projectPcts = distributeRounded(
-                allCO2Values.map((v) =>
-                    totalProjectCO2 > 0 ? (v / totalProjectCO2) * 100 : 0
-                ),
+                allCO2Values.map((v) => (totalProjectCO2 > 0 ? (v / totalProjectCO2) * 100 : 0)),
                 0
             );
             const projectKgs = distributeRounded(
@@ -286,9 +284,7 @@ async function main(): Promise<void> {
                 sync: syncInfo.enabled
                     ? {
                           team: syncInfo.team,
-                          dashboard_url: syncInfo.teamId
-                              ? getDashboardUrl(syncInfo.teamId)
-                              : null,
+                          dashboard_url: syncInfo.teamId ? getDashboardUrl(syncInfo.teamId) : null,
                           database_path: getDatabasePath(),
                           pending_count: syncInfo.pendingCount
                       }

@@ -1,8 +1,8 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "test": {},
-    "typecheck": {},
-    "lint": {}
-  }
+    "$schema": "https://turbo.build/schema.json",
+    "tasks": {
+        "test": {},
+        "typecheck": {},
+        "lint": {}
+    }
 }

@@ -653,59 +653,80 @@ describe('getConfig / setConfig / deleteConfig', () => {
 });
 
 describe('getUnsyncedSessions / markSessionsSynced', () => {
+    it('filters out non-UUID session IDs', () => {
+        const db = createTestDb();
+        upsertSession(db, makeSession({ sessionId: '656d2ae1-4f62-41c4-b6a4-d616838bb553' }));
+        upsertSession(db, makeSession({ sessionId: 'agent-a3a2ed9' }));
+        upsertSession(db, makeSession({ sessionId: 'agent-acompact-af1cb8' }));
+
+        const unsynced = getUnsyncedSessions(db, 100);
+        expect(unsynced).toHaveLength(1);
+        expect(unsynced[0].sessionId).toBe('656d2ae1-4f62-41c4-b6a4-d616838bb553');
+        db.close();
+    });
+
     it('new sessions default to sync_status pending', () => {
         const db = createTestDb();
         upsertSession(db, makeSession({ sessionId: 's1' }));
         upsertSession(db, makeSession({ sessionId: 's2' }));
 
-        const unsynced = getUnsyncedSessions(db, 100);
-        expect(unsynced).toHaveLength(2);
-        expect(unsynced.map((s) => s.sessionId).sort()).toEqual(['s1', 's2']);
+        // Note: s1/s2 are not UUIDs so won't pass the UUID filter,
+        // but we're testing the sync_status default here
+        const rows = db
+            .prepare("SELECT sync_status FROM sessions WHERE session_id IN ('s1', 's2')")
+            .all() as { sync_status: string }[];
+        expect(rows).toHaveLength(2);
+        for (const r of rows) {
+            expect(r.sync_status).toBe('pending');
+        }
 
-        const row = db
-            .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
-            .get('s1') as { sync_status: string };
-        expect(row.sync_status).toBe('pending');
         db.close();
     });
 
     it('markSessionsSynced sets sync_status to synced', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        upsertSession(db, makeSession({ sessionId: 's2' }));
-        upsertSession(db, makeSession({ sessionId: 's3' }));
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        const uuid2 = '22222222-2222-2222-2222-222222222222';
+        const uuid3 = '33333333-3333-3333-3333-333333333333';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        upsertSession(db, makeSession({ sessionId: uuid2 }));
+        upsertSession(db, makeSession({ sessionId: uuid3 }));
 
-        markSessionsSynced(db, ['s1', 's3']);
+        markSessionsSynced(db, [uuid1, uuid3]);
 
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(1);
-        expect(unsynced[0].sessionId).toBe('s2');
+        expect(unsynced[0].sessionId).toBe(uuid2);
 
         const row = db
             .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
-            .get('s1') as { sync_status: string };
+            .get(uuid1) as { sync_status: string };
         expect(row.sync_status).toBe('synced');
         db.close();
     });
 
     it('markSessionSyncFailed sets sync_status to failed', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
 
-        markSessionSyncFailed(db, ['s1']);
+        markSessionSyncFailed(db, [uuid1]);
 
         const row = db
             .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
-            .get('s1') as { sync_status: string };
+            .get(uuid1) as { sync_status: string };
         expect(row.sync_status).toBe('failed');
         db.close();
     });
 
     it('respects limit parameter', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        upsertSession(db, makeSession({ sessionId: 's2' }));
-        upsertSession(db, makeSession({ sessionId: 's3' }));
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        const uuid2 = '22222222-2222-2222-2222-222222222222';
+        const uuid3 = '33333333-3333-3333-3333-333333333333';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        upsertSession(db, makeSession({ sessionId: uuid2 }));
+        upsertSession(db, makeSession({ sessionId: uuid3 }));
 
         const unsynced = getUnsyncedSessions(db, 2);
         expect(unsynced).toHaveLength(2);
@@ -714,8 +735,9 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
 
     it('returns empty array when all sessions are synced', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        markSessionsSynced(db, ['s1']);
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        markSessionsSynced(db, [uuid1]);
 
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(0);
@@ -724,46 +746,49 @@ describe('getUnsyncedSessions / markSessionsSynced', () => {
 
     it('upserting a synced session transitions sync_status to dirty', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        markSessionsSynced(db, ['s1']);
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        markSessionsSynced(db, [uuid1]);
 
         // Re-upsert (e.g., session updated with new tokens)
-        upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
+        upsertSession(db, makeSession({ sessionId: uuid1, outputTokens: 999 }));
 
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(1);
-        expect(unsynced[0].sessionId).toBe('s1');
+        expect(unsynced[0].sessionId).toBe(uuid1);
 
         const row = db
             .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
-            .get('s1') as { sync_status: string };
+            .get(uuid1) as { sync_status: string };
         expect(row.sync_status).toBe('dirty');
         db.close();
     });
 
     it('upserting a failed session transitions sync_status to dirty', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        markSessionSyncFailed(db, ['s1']);
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        markSessionSyncFailed(db, [uuid1]);
 
-        upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
+        upsertSession(db, makeSession({ sessionId: uuid1, outputTokens: 999 }));
 
         const row = db
             .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
-            .get('s1') as { sync_status: string };
+            .get(uuid1) as { sync_status: string };
         expect(row.sync_status).toBe('dirty');
         db.close();
     });
 
     it('upserting a pending session keeps sync_status as pending', () => {
         const db = createTestDb();
-        upsertSession(db, makeSession({ sessionId: 's1' }));
+        const uuid1 = '11111111-1111-1111-1111-111111111111';
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
 
-        upsertSession(db, makeSession({ sessionId: 's1', outputTokens: 999 }));
+        upsertSession(db, makeSession({ sessionId: uuid1, outputTokens: 999 }));
 
         const row = db
             .prepare('SELECT sync_status FROM sessions WHERE session_id = ?')
-            .get('s1') as { sync_status: string };
+            .get(uuid1) as { sync_status: string };
         expect(row.sync_status).toBe('pending');
         db.close();
     });
@@ -818,11 +843,15 @@ describe('getProjectConfig / setProjectConfig / deleteProjectConfig', () => {
 });
 
 describe('configureSyncTracking sync_status behavior', () => {
+    const uuid1 = '11111111-1111-1111-1111-111111111111';
+    const uuid2 = '22222222-2222-2222-2222-222222222222';
+    const uuid3 = '33333333-3333-3333-3333-333333333333';
+
     it('first sync enable without backfill marks existing sessions as synced', () => {
         const db = createTestDb();
         // Simulate existing sessions before sync is enabled
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        upsertSession(db, makeSession({ sessionId: 's2' }));
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        upsertSession(db, makeSession({ sessionId: uuid2 }));
 
         // Verify they start as pending
         expect(getUnsyncedSessions(db, 100)).toHaveLength(2);
@@ -837,10 +866,10 @@ describe('configureSyncTracking sync_status behavior', () => {
         expect(getUnsyncedSessions(db, 100)).toHaveLength(0);
 
         // New session added after enabling sync should need sync
-        upsertSession(db, makeSession({ sessionId: 's3' }));
+        upsertSession(db, makeSession({ sessionId: uuid3 }));
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(1);
-        expect(unsynced[0].sessionId).toBe('s3');
+        expect(unsynced[0].sessionId).toBe(uuid3);
         db.close();
     });
 
@@ -852,8 +881,8 @@ describe('configureSyncTracking sync_status behavior', () => {
         setConfig(db, 'claude_code_team', 'Existing Org');
 
         // Add sessions that haven't synced yet
-        upsertSession(db, makeSession({ sessionId: 's1' }));
-        upsertSession(db, makeSession({ sessionId: 's2' }));
+        upsertSession(db, makeSession({ sessionId: uuid1 }));
+        upsertSession(db, makeSession({ sessionId: uuid2 }));
 
         // Re-running setup should NOT clear pending sessions because
         // existingUserId is already set (isFirstEnable = false)
@@ -862,6 +891,43 @@ describe('configureSyncTracking sync_status behavior', () => {
 
         const unsynced = getUnsyncedSessions(db, 100);
         expect(unsynced).toHaveLength(2);
+        db.close();
+    });
+});
+
+describe('migration v8 — remove agent-* session rows', () => {
+    it('deletes agent-* rows from sessions table', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+
+        // Insert both UUID and agent-* sessions
+        upsertSession(db, makeSession({ sessionId: '656d2ae1-4f62-41c4-b6a4-d616838bb553' }));
+        upsertSession(db, makeSession({ sessionId: 'agent-a3a2ed9' }));
+        upsertSession(db, makeSession({ sessionId: 'agent-acompact-af1cb8' }));
+
+        // Verify all three exist
+        expect(getAllSessionIds(db)).toHaveLength(3);
+
+        // Rewind to v7 and re-run migrations
+        db.run('PRAGMA user_version = 7');
+        initializeDatabase(db);
+
+        const ids = getAllSessionIds(db);
+        expect(ids).toHaveLength(1);
+        expect(ids[0]).toBe('656d2ae1-4f62-41c4-b6a4-d616838bb553');
+        db.close();
+    });
+
+    it('is a no-op when no agent-* rows exist', () => {
+        const db = new Database(':memory:');
+        initializeDatabase(db);
+
+        upsertSession(db, makeSession({ sessionId: '656d2ae1-4f62-41c4-b6a4-d616838bb553' }));
+
+        db.run('PRAGMA user_version = 7');
+        initializeDatabase(db);
+
+        expect(getAllSessionIds(db)).toHaveLength(1);
         db.close();
     });
 });
