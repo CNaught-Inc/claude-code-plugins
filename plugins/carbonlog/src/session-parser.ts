@@ -182,9 +182,9 @@ function parseJsonlFile(filePath: string): TokenUsageRecord[] {
 }
 
 /**
- * Find subagent transcript files inside a session's subagents/ directory.
+ * Find all subagent transcript files for a session
  */
-function findNestedSubagentFiles(sessionDir: string): string[] {
+function findSubagentFiles(sessionDir: string): string[] {
     const subagentsDir = path.join(sessionDir, 'subagents');
 
     if (!fs.existsSync(subagentsDir)) {
@@ -199,39 +199,6 @@ function findNestedSubagentFiles(sessionDir: string): string[] {
     } catch {
         return [];
     }
-}
-
-/**
- * Find top-level agent-*.jsonl files in a project directory that belong to a given session.
- * Claude Code sometimes places subagent transcripts at the project root instead of
- * inside a subagents/ subdirectory. These files contain a `sessionId` field in their
- * JSON entries that points to the parent session UUID.
- */
-function findTopLevelAgentFiles(projectDir: string, parentSessionId: string): string[] {
-    try {
-        const files = fs.readdirSync(projectDir);
-        return files
-            .filter((f) => {
-                if (!f.startsWith('agent-') || !f.endsWith('.jsonl')) return false;
-                const filePath = path.join(projectDir, f);
-                const parentId = extractParentSessionId(filePath);
-                return parentId === parentSessionId;
-            })
-            .map((f) => path.join(projectDir, f));
-    } catch {
-        return [];
-    }
-}
-
-/**
- * Find all subagent transcript files for a session, from both:
- * 1. The session's subagents/ subdirectory (nested pattern)
- * 2. Top-level agent-*.jsonl files in the project directory (flat pattern)
- */
-function findSubagentFiles(sessionSubDir: string, projectDir: string, sessionId: string): string[] {
-    const nested = findNestedSubagentFiles(sessionSubDir);
-    const topLevel = findTopLevelAgentFiles(projectDir, sessionId);
-    return [...nested, ...topLevel];
 }
 
 /**
@@ -442,12 +409,8 @@ export function parseSession(transcriptPath: string, rawProjectPath?: string): S
     // Parse main transcript
     const mainRecords = parseJsonlLines(mainLines);
 
-    // Parse subagent transcripts (both nested and top-level patterns)
-    const subagentFiles = findSubagentFiles(
-        path.join(sessionDir, sessionId),
-        sessionDir,
-        sessionId
-    );
+    // Parse subagent transcripts
+    const subagentFiles = findSubagentFiles(path.join(sessionDir, sessionId));
     const subagentRecords = subagentFiles.flatMap((f) => parseJsonlFile(f));
 
     // Combine all records
