@@ -44,17 +44,21 @@ export function isValidSessionId(sessionId: string): boolean {
 export function extractParentSessionId(filePath: string): string | null {
     try {
         const content = fs.readFileSync(filePath, 'utf-8');
-        // Read just the first non-empty line
-        const firstLine = content.split('\n').find((line) => line.trim());
-        if (!firstLine) return null;
-
-        const entry = JSON.parse(firstLine);
-        const sessionId = entry.sessionId;
-        if (typeof sessionId === 'string' && UUID_PATTERN.test(sessionId)) {
-            return sessionId;
+        const lines = content.split('\n');
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const entry = JSON.parse(line);
+                const sessionId = entry.sessionId;
+                if (typeof sessionId === 'string' && UUID_PATTERN.test(sessionId)) {
+                    return sessionId;
+                }
+            } catch {
+                // Skip malformed lines
+            }
         }
     } catch {
-        // File unreadable or malformed
+        // File unreadable
     }
     return null;
 }

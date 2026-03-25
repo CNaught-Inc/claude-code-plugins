@@ -383,6 +383,19 @@ describe('extractParentSessionId', () => {
         expect(result).toBe(parentUuid);
     });
 
+    it('skips lines without sessionId and finds it on a later line', () => {
+        const parentUuid = '656d2ae1-4f62-41c4-b6a4-d616838bb553';
+        mockReadFileSync.mockReturnValue(
+            [
+                JSON.stringify({ type: 'summary', summary: 'Some summary', leafUuid: 'abc' }),
+                JSON.stringify({ type: 'assistant', sessionId: parentUuid, agentId: 'a3a2ed9' })
+            ].join('\n')
+        );
+
+        const result = extractParentSessionId('/path/to/agent-a3a2ed9.jsonl');
+        expect(result).toBe(parentUuid);
+    });
+
     it('returns null for files without sessionId', () => {
         mockReadFileSync.mockReturnValue(JSON.stringify({ type: 'assistant', message: {} }));
 
