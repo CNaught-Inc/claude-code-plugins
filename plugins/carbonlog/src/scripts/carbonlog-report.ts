@@ -190,6 +190,116 @@ async function main(): Promise<void> {
 
         const totalCO2 = allTimeStats.totalCO2Grams;
         const totalEnergy = allTimeStats.totalEnergyWh;
+        const totalKg = totalCO2 / 1000;
+        const totalKwh = totalEnergy / 1000;
+        const totalTokens = allTimeStats.totalInputTokens + allTimeStats.totalOutputTokens;
+
+        const trackingSince = oldestSessionDate
+            ? new Date(oldestSessionDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+              })
+            : null;
+
+        // ── JSON output mode ──────────────────────────────────
+        if (process.argv.includes('--json')) {
+            const KG_PER_DAILY_HOME_ENERGY = 7930 / 365;
+            const milesDriven = totalKg * MILES_PER_KG_CO2;
+            const homeDays = totalKg / KG_PER_DAILY_HOME_ENERGY;
+
+            // Model breakdown
+            const totalModelCO2 = modelStats.reduce((sum, m) => sum + m.co2Grams, 0);
+            const modelCO2Values = modelStats.map((m) => m.co2Grams);
+            const modelPcts = distributeRounded(
+                modelCO2Values.map((v) => (totalModelCO2 > 0 ? (v / totalModelCO2) * 100 : 0)),
+                0
+            );
+            const modelKgs = distributeRounded(
+                modelCO2Values.map((v) => v / 1000),
+                2
+            );
+
+            // Project breakdown
+            const totalProjectCO2 = projectStats.reduce((sum, p) => sum + p.co2Grams, 0);
+            const displayedProjects = projectStats.slice(0, 5);
+            const otherCO2 =
+                projectStats.length > 5
+                    ? projectStats.slice(5).reduce((sum, p) => sum + p.co2Grams, 0)
+                    : 0;
+            const allCO2Values = [
+                ...displayedProjects.map((p) => p.co2Grams),
+                ...(otherCO2 > 0 ? [otherCO2] : [])
+            ];
+            const projectPcts = distributeRounded(
+                allCO2Values.map((v) =>
+                    totalProjectCO2 > 0 ? (v / totalProjectCO2) * 100 : 0
+                ),
+                0
+            );
+            const projectKgs = distributeRounded(
+                allCO2Values.map((v) => v / 1000),
+                2
+            );
+
+            const report = {
+                summary: {
+                    co2_kg: Number(totalKg.toFixed(2)),
+                    energy_kwh: Number(totalKwh.toFixed(2)),
+                    sessions: allTimeStats.totalSessions,
+                    total_tokens: totalTokens,
+                    output_tokens: allTimeStats.totalOutputTokens,
+                    tracking_since: trackingSince
+                },
+                equivalents:
+                    totalCO2 > 0
+                        ? {
+                              miles_driven: Number(milesDriven.toFixed(2)),
+                              home_energy_days: Number(homeDays.toFixed(2))
+                          }
+                        : null,
+                by_model: modelStats.map((m, i) => ({
+                    name: friendlyModelName(m.model),
+                    co2_kg: modelKgs[i],
+                    sessions: m.sessions,
+                    pct: modelPcts[i]
+                })),
+                by_project:
+                    projectStats.length > 1
+                        ? [
+                              ...displayedProjects.map((p, i) => ({
+                                  name: path.basename(p.projectPath),
+                                  co2_kg: projectKgs[i],
+                                  pct: projectPcts[i]
+                              })),
+                              ...(otherCO2 > 0
+                                  ? [
+                                        {
+                                            name: `+ ${projectStats.length - 5} others`,
+                                            co2_kg: projectKgs[displayedProjects.length],
+                                            pct: projectPcts[displayedProjects.length]
+                                        }
+                                    ]
+                                  : [])
+                          ]
+                        : null,
+                sync: syncInfo.enabled
+                    ? {
+                          team: syncInfo.team,
+                          dashboard_url: syncInfo.teamId
+                              ? getDashboardUrl(syncInfo.teamId)
+                              : null,
+                          database_path: getDatabasePath(),
+                          pending_count: syncInfo.pendingCount
+                      }
+                    : null,
+                methodology_url:
+                    'https://github.com/CNaught-Inc/claude-code-plugins/blob/main/plugins/carbonlog/methodology.md'
+            };
+
+            console.log(JSON.stringify(report));
+            return;
+        }
 
         // ── Header ────────────────────────────────────────────
         console.log('');
@@ -199,13 +309,6 @@ async function main(): Promise<void> {
         console.log('');
 
         // ── Big numbers ───────────────────────────────────────
-        const trackingSince = oldestSessionDate
-            ? new Date(oldestSessionDate).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-              })
-            : null;
         console.log(
             `${c.bold}  Summary${c.reset}${trackingSince ? `  ${c.dim}(since ${trackingSince})${c.reset}` : ''}`
         );
@@ -217,7 +320,6 @@ async function main(): Promise<void> {
         console.log(
             `    ${c.bold}${c.teal}Energy${c.reset} ${c.bold}${kwh(totalEnergy)}${c.reset} kWh`
         );
-        const totalTokens = allTimeStats.totalInputTokens + allTimeStats.totalOutputTokens;
         console.log(
             `    ${c.dim}Sessions: ${fmt(allTimeStats.totalSessions)} · Tokens: ${fmt(totalTokens)} (${fmt(allTimeStats.totalOutputTokens)} output)${c.reset}`
         );
