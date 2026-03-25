@@ -34,27 +34,27 @@ Run the script above to get report data as JSON. Then format and display the rep
 Summary  (since {summary.tracking_since})
 ──────────────────────────────────────────────────
 
-  CO₂    **{summary.co2_kg}** kg
-  Energy **{summary.energy_kwh}** kWh
+  CO₂    {summary.co2_kg} kg
+  Energy {summary.energy_kwh} kWh
   Sessions: {summary.sessions} · Tokens: {summary.total_tokens} ({summary.output_tokens} output)
   Emissions estimated from output tokens
 
 Equivalents
 ──────────────────────────────────────────────────
 
-  🚗  Miles driven       **{equivalents.miles_driven} miles**
-  🏠  Home energy         **{equivalents.home_energy_days} days**
+  🚗  Miles driven       {equivalents.miles_driven} miles
+  🏠  Home energy         {equivalents.home_energy_days} days
 
 By Model
 ──────────────────────────────────────────────────
 
-  [■■■■■··········] {model_name}  **{co2}kg**  {sessions} sessions · {pct}%
+  [■■■■■··········] {model_name}  {co2}kg  {sessions} sessions · {pct}%
   (one row per model, sorted by CO2 descending)
 
 By Project
 ──────────────────────────────────────────────────
 
-  [■■■■■■■········] {project_name}  **{co2}kg**  {pct}%
+  [■■■■■■■········] {project_name}  {co2}kg  {pct}%
   (one row per project, sorted by CO2 descending)
 
 Sync
