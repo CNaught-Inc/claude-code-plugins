@@ -21,6 +21,7 @@ Run the script above to get report data as JSON. Then format and display the rep
 - Pad model names to 22 characters, project names to the length of the longest project name
 - Right-align CO2 values (pad kg values to 8 characters wide including "kg" suffix)
 - Format large numbers with commas (e.g. 12,965,819)
+- Use markdown **bold** for key values: CO₂ and Energy amounts, miles driven and home energy days, and the CO2 kg values in each model/project row
 - Omit any section where the JSON value is `null`
 
 ### Template
@@ -33,27 +34,27 @@ Run the script above to get report data as JSON. Then format and display the rep
 Summary  (since {summary.tracking_since})
 ──────────────────────────────────────────────────
 
-  CO₂    {summary.co2_kg} kg
-  Energy {summary.energy_kwh} kWh
+  CO₂    **{summary.co2_kg}** kg
+  Energy **{summary.energy_kwh}** kWh
   Sessions: {summary.sessions} · Tokens: {summary.total_tokens} ({summary.output_tokens} output)
   Emissions estimated from output tokens
 
 Equivalents
 ──────────────────────────────────────────────────
 
-  🚗  Miles driven       {equivalents.miles_driven} miles
-  🏠  Home energy         {equivalents.home_energy_days} days
+  🚗  Miles driven       **{equivalents.miles_driven} miles**
+  🏠  Home energy         **{equivalents.home_energy_days} days**
 
 By Model
 ──────────────────────────────────────────────────
 
-  [■■■■■··········] {model_name}  {co2}kg  {sessions} sessions · {pct}%
+  [■■■■■··········] {model_name}  **{co2}kg**  {sessions} sessions · {pct}%
   (one row per model, sorted by CO2 descending)
 
 By Project
 ──────────────────────────────────────────────────
 
-  [■■■■■■■········] {project_name}  {co2}kg  {pct}%
+  [■■■■■■■········] {project_name}  **{co2}kg**  {pct}%
   (one row per project, sorted by CO2 descending)
 
 Sync
