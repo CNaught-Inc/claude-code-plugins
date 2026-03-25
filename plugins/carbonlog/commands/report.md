@@ -18,11 +18,14 @@ Run the script above to get report data as JSON. Then format and display the rep
 
 - Use `■` for filled progress bar segments and `·` for empty ones, 15 characters wide, wrapped in `[]`
 - Calculate filled segments as: `round((item_co2 / max_co2_in_section) * 15)`
-- Pad model names to 22 characters, project names to the length of the longest project name
-- Right-align CO2 values (pad kg values to 8 characters wide including "kg" suffix)
 - Format large numbers with commas (e.g. 12,965,819)
-- Use markdown **bold** for key values: CO₂ and Energy amounts, miles driven and home energy days, and the CO2 kg values in each model/project row
+- Use markdown bold for key values: CO₂ and Energy amounts, miles driven and home energy days, and the CO2 kg values in each model/project row.
 - Omit any section where the JSON value is `null`
+
+Column alignment (critical — every row in a section must have its columns at the same character position):
+- **By Model**: pad model names to the width of the longest model name. Right-pad kg values to 7 chars total. Right-pad session counts to 3 digits. Right-pad percentages to 2 digits.
+- **By Project**: pad project names to the width of the longest project name. Right-pad kg values to 7 chars total. Right-pad percentages to 2 digits.
+- **Bold + alignment**: alignment padding spaces must go BEFORE the `**` marker, never inside it. Example: `  **4.36kg**` is correct, `**  4.36kg**` is wrong. The `**` must be immediately adjacent to the value with no spaces inside.
 
 ### Template
 
