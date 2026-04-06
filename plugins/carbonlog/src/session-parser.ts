@@ -16,6 +16,54 @@ import { getClaudeDir } from './data-store';
 import { resolveProjectIdentifier } from './project-identifier';
 
 /**
+ * Check if a session ID is an agent/subagent ID (not a UUID).
+ * Agent IDs have the form "agent-<hash>" (e.g., "agent-a3a2ed9").
+ */
+export function isAgentSessionId(sessionId: string): boolean {
+    return sessionId.startsWith('agent-');
+}
+
+/**
+ * UUID v4 pattern for validating session IDs.
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Check if a session ID looks like a valid UUID.
+ */
+export function isValidSessionId(sessionId: string): boolean {
+    return UUID_PATTERN.test(sessionId);
+}
+
+/**
+ * Extract the parent session UUID from a JSONL transcript file.
+ * Agent transcript files contain a `sessionId` field in their JSON entries
+ * that refers to the parent session's UUID.
+ * Returns null if the file can't be read or doesn't contain a sessionId.
+ */
+export function extractParentSessionId(filePath: string): string | null {
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n');
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const entry = JSON.parse(line);
+                const sessionId = entry.sessionId;
+                if (typeof sessionId === 'string' && UUID_PATTERN.test(sessionId)) {
+                    return sessionId;
+                }
+            } catch {
+                // Skip malformed lines
+            }
+        }
+    } catch {
+        // File unreadable
+    }
+    return null;
+}
+
+/**
  * Schema for a single transcript entry
  */
 const TranscriptEntrySchema = z.object({
@@ -161,7 +209,9 @@ export function getClaudeProjectsDir(): string {
 }
 
 /**
- * Find the transcript file for a session
+ * Find the transcript file for a session.
+ * For agent session IDs (e.g., "agent-a3a2ed9"), this finds the agent's own file,
+ * not the parent session file. Use resolveAgentSession() to resolve to the parent.
  */
 export function findTranscriptPath(sessionId: string, projectPath?: string): string | null {
     const projectsDir = getClaudeProjectsDir();
@@ -194,6 +244,38 @@ export function findTranscriptPath(sessionId: string, projectPath?: string): str
     }
 
     return null;
+}
+
+/**
+ * Resolve an agent session ID to its parent session.
+ * Returns the parent session ID and transcript path, or null if unresolvable.
+ *
+ * For agent IDs: finds the agent's transcript, reads the parent sessionId from JSON,
+ * then finds the parent's transcript file.
+ * For regular UUIDs: returns them as-is with their transcript path.
+ */
+export function resolveSessionId(
+    sessionId: string,
+    projectPath?: string
+): { sessionId: string; transcriptPath: string } | null {
+    if (!isAgentSessionId(sessionId)) {
+        const transcriptPath = findTranscriptPath(sessionId, projectPath);
+        if (!transcriptPath) return null;
+        return { sessionId, transcriptPath };
+    }
+
+    // Find the agent's own transcript file to read the parent sessionId
+    const agentTranscriptPath = findTranscriptPath(sessionId, projectPath);
+    if (!agentTranscriptPath) return null;
+
+    const parentId = extractParentSessionId(agentTranscriptPath);
+    if (!parentId) return null;
+
+    // Find the parent session's transcript
+    const parentTranscriptPath = findTranscriptPath(parentId, projectPath);
+    if (!parentTranscriptPath) return null;
+
+    return { sessionId: parentId, transcriptPath: parentTranscriptPath };
 }
 
 /**
@@ -414,7 +496,9 @@ export function findAllTranscripts(): string[] {
 
             const files = fs.readdirSync(projectDir);
             for (const file of files) {
-                if (file.endsWith('.jsonl')) {
+                // Skip agent-*.jsonl files — these are subagent transcripts
+                // whose tokens belong to a parent session
+                if (file.endsWith('.jsonl') && !file.startsWith('agent-')) {
                     transcripts.push(path.join(projectDir, file));
                 }
             }

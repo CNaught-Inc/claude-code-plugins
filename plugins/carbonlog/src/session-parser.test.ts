@@ -40,7 +40,11 @@ const {
     getSessionIdFromPath,
     findTranscriptPath,
     findAllTranscripts,
-    parseSession
+    parseSession,
+    isAgentSessionId,
+    isValidSessionId,
+    extractParentSessionId,
+    resolveSessionId
 } = await import('./session-parser');
 
 beforeEach(() => {
@@ -333,6 +337,164 @@ describe('parseSession', () => {
     });
 });
 
+describe('isAgentSessionId', () => {
+    it('returns true for agent-prefixed IDs', () => {
+        expect(isAgentSessionId('agent-a3a2ed9')).toBe(true);
+        expect(isAgentSessionId('agent-acompact-af1cb8')).toBe(true);
+    });
+
+    it('returns false for UUID session IDs', () => {
+        expect(isAgentSessionId('656d2ae1-4f62-41c4-b6a4-d616838bb553')).toBe(false);
+    });
+
+    it('returns false for empty string', () => {
+        expect(isAgentSessionId('')).toBe(false);
+    });
+});
+
+describe('isValidSessionId', () => {
+    it('returns true for valid UUIDs', () => {
+        expect(isValidSessionId('656d2ae1-4f62-41c4-b6a4-d616838bb553')).toBe(true);
+        expect(isValidSessionId('00000000-0000-0000-0000-000000000000')).toBe(true);
+    });
+
+    it('returns false for agent IDs', () => {
+        expect(isValidSessionId('agent-a3a2ed9')).toBe(false);
+    });
+
+    it('returns false for arbitrary strings', () => {
+        expect(isValidSessionId('not-a-uuid')).toBe(false);
+    });
+});
+
+describe('extractParentSessionId', () => {
+    it('extracts sessionId from a JSONL file', () => {
+        const parentUuid = '656d2ae1-4f62-41c4-b6a4-d616838bb553';
+        mockReadFileSync.mockReturnValue(
+            JSON.stringify({
+                type: 'assistant',
+                sessionId: parentUuid,
+                agentId: 'a3a2ed9',
+                message: { model: 'claude-sonnet-4-20250514' }
+            })
+        );
+
+        const result = extractParentSessionId('/path/to/agent-a3a2ed9.jsonl');
+        expect(result).toBe(parentUuid);
+    });
+
+    it('skips lines without sessionId and finds it on a later line', () => {
+        const parentUuid = '656d2ae1-4f62-41c4-b6a4-d616838bb553';
+        mockReadFileSync.mockReturnValue(
+            [
+                JSON.stringify({ type: 'summary', summary: 'Some summary', leafUuid: 'abc' }),
+                JSON.stringify({ type: 'assistant', sessionId: parentUuid, agentId: 'a3a2ed9' })
+            ].join('\n')
+        );
+
+        const result = extractParentSessionId('/path/to/agent-a3a2ed9.jsonl');
+        expect(result).toBe(parentUuid);
+    });
+
+    it('returns null for files without sessionId', () => {
+        mockReadFileSync.mockReturnValue(JSON.stringify({ type: 'assistant', message: {} }));
+
+        const result = extractParentSessionId('/path/to/file.jsonl');
+        expect(result).toBeNull();
+    });
+
+    it('returns null for non-UUID sessionId values', () => {
+        mockReadFileSync.mockReturnValue(
+            JSON.stringify({ type: 'assistant', sessionId: 'not-a-uuid' })
+        );
+
+        const result = extractParentSessionId('/path/to/file.jsonl');
+        expect(result).toBeNull();
+    });
+
+    it('returns null for empty files', () => {
+        mockReadFileSync.mockReturnValue('');
+
+        const result = extractParentSessionId('/path/to/file.jsonl');
+        expect(result).toBeNull();
+    });
+
+    it('returns null when file read fails', () => {
+        mockReadFileSync.mockImplementation(() => {
+            throw new Error('ENOENT');
+        });
+
+        const result = extractParentSessionId('/path/to/nonexistent.jsonl');
+        expect(result).toBeNull();
+    });
+});
+
+describe('resolveSessionId', () => {
+    it('returns UUID session IDs as-is with their transcript path', () => {
+        const uuid = '656d2ae1-4f62-41c4-b6a4-d616838bb553';
+        mockExistsSync.mockImplementation((p: unknown) => {
+            return String(p) === `/home/testuser/.claude/projects/-test-project/${uuid}.jsonl`;
+        });
+
+        const result = resolveSessionId(uuid, '/test/project');
+        expect(result).not.toBeNull();
+        expect(result?.sessionId).toBe(uuid);
+        expect(result?.transcriptPath).toContain(`${uuid}.jsonl`);
+    });
+
+    it('resolves agent session IDs to parent UUID', () => {
+        const parentUuid = '656d2ae1-4f62-41c4-b6a4-d616838bb553';
+        const agentId = 'agent-a3a2ed9';
+
+        mockExistsSync.mockImplementation((p: unknown) => {
+            const s = String(p);
+            return (
+                s === `/home/testuser/.claude/projects/-test-project/${agentId}.jsonl` ||
+                s === `/home/testuser/.claude/projects/-test-project/${parentUuid}.jsonl`
+            );
+        });
+        mockReadFileSync.mockImplementation((p: unknown) => {
+            const s = String(p);
+            if (s.includes(agentId)) {
+                return JSON.stringify({
+                    type: 'assistant',
+                    sessionId: parentUuid,
+                    agentId: 'a3a2ed9'
+                });
+            }
+            return '';
+        });
+
+        const result = resolveSessionId(agentId, '/test/project');
+        expect(result).not.toBeNull();
+        expect(result?.sessionId).toBe(parentUuid);
+        expect(result?.transcriptPath).toContain(`${parentUuid}.jsonl`);
+    });
+
+    it('returns null when agent transcript cannot be found', () => {
+        mockExistsSync.mockReturnValue(false);
+
+        const result = resolveSessionId('agent-a3a2ed9', '/test/project');
+        expect(result).toBeNull();
+    });
+
+    it('returns null when parent session transcript is missing', () => {
+        const parentUuid = '656d2ae1-4f62-41c4-b6a4-d616838bb553';
+
+        mockExistsSync.mockImplementation((p: unknown) => {
+            const s = String(p);
+            // Agent file exists but parent file does not
+            return s === '/home/testuser/.claude/projects/-test-project/agent-a3a2ed9.jsonl';
+        });
+        mockReadFileSync.mockReturnValue(
+            JSON.stringify({ type: 'assistant', sessionId: parentUuid })
+        );
+
+        const result = resolveSessionId('agent-a3a2ed9', '/test/project');
+        expect(result).toBeNull();
+    });
+});
+
 describe('findAllTranscripts', () => {
     it('returns empty array when projects dir does not exist', () => {
         mockExistsSync.mockReturnValue(false);
@@ -358,6 +520,27 @@ describe('findAllTranscripts', () => {
         expect(result.some((p) => p.includes('session-3.jsonl'))).toBe(true);
         // notes.txt should not be included
         expect(result.some((p) => p.includes('notes.txt'))).toBe(false);
+    });
+
+    it('skips agent-*.jsonl files at the top level', () => {
+        mockExistsSync.mockReturnValue(true);
+        mockReaddirSync.mockImplementation((p: unknown) => {
+            const dir = String(p);
+            if (dir.endsWith('projects')) return ['project-a'] as any;
+            if (dir.endsWith('project-a'))
+                return [
+                    'session-1.jsonl',
+                    'agent-a3a2ed9.jsonl',
+                    'agent-acompact-af1cb8.jsonl'
+                ] as any;
+            return [] as any;
+        });
+        mockStatSync.mockReturnValue({ isDirectory: () => true } as any);
+
+        const result = findAllTranscripts();
+        expect(result).toHaveLength(1);
+        expect(result[0]).toContain('session-1.jsonl');
+        expect(result.some((p) => p.includes('agent-'))).toBe(false);
     });
 
     it('skips non-directory entries in projects dir', () => {

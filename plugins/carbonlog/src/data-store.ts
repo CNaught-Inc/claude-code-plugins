@@ -264,6 +264,22 @@ export const MIGRATIONS: Migration[] = [
                 "UPDATE plugin_config SET key = 'claude_code_team' WHERE key = 'claude_code_organization'"
             );
         }
+    },
+    {
+        version: 8,
+        description: 'Remove agent-* session rows (subagent data is merged into parent sessions)',
+        up: (db) => {
+            // Agent session IDs (e.g., "agent-a3a2ed9") are subagent transcripts that
+            // should never have been stored as independent sessions. Their token data
+            // is already included in the parent session via parseSession().
+            // Simply delete them — the parent session will be re-parsed on next stop hook.
+            const deleted = db
+                .prepare("DELETE FROM sessions WHERE session_id LIKE 'agent-%'")
+                .run();
+            if (deleted.changes > 0) {
+                logError(`Migration v8: removed ${deleted.changes} agent-* session row(s)`);
+            }
+        }
     }
 ];
 
@@ -573,12 +589,19 @@ export function getOldestSessionDate(db: Database): string | null {
 }
 
 /**
- * Get sessions that need syncing to the API
+ * UUID v4 pattern for validating session IDs before sync.
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Get sessions that need syncing to the API.
+ * Filters out sessions with non-UUID session IDs (e.g., agent-* IDs)
+ * that would be rejected by the server.
  */
 export function getUnsyncedSessions(db: Database, limit: number = 100): SessionRecord[] {
     const stmt = db.prepare("SELECT * FROM sessions WHERE sync_status != 'synced' LIMIT ?");
     const rows = stmt.all(limit) as Record<string, unknown>[];
-    return rows.map(rowToSession);
+    return rows.map(rowToSession).filter((s) => UUID_PATTERN.test(s.sessionId));
 }
 
 /**
